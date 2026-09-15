@@ -11613,6 +11613,76 @@ function Pricing() {
   const [myTier, setMyTier] = useState(null); // null while loading — avoids Free wrongly flashing as "current" before the real tier loads
   const [myBillingInterval, setMyBillingInterval] = useState(null); // "monthly" | "yearly" | null — only meaningful when myTier === "premium"
   const [proBilling, setProBilling] = useState("monthly"); // "monthly" | "yearly" — toggle inside the single Pro card
+  const [checkoutLoadingPlan, setCheckoutLoadingPlan] = useState(null); // which plan key is currently mid-checkout, or null
+  const [checkoutError, setCheckoutError] = useState("");
+
+  async function loadRazorpayScript() {
+    if (document.getElementById("razorpay-checkout-script")) return true;
+    return new Promise((resolve) => {
+      const script = document.createElement("script");
+      script.id = "razorpay-checkout-script";
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  }
+
+  async function handleUpgradeClick(planKey, billingInterval) {
+    setCheckoutError("");
+    setCheckoutLoadingPlan(planKey);
+
+    const scriptLoaded = await loadRazorpayScript();
+    if (!scriptLoaded) {
+      setCheckoutError("Couldn't load the payment window — please check your connection and try again.");
+      setCheckoutLoadingPlan(null);
+      return;
+    }
+
+    const { data: order, error: orderError } = await supabase.functions.invoke("create-razorpay-order", {
+      body: { plan: planKey, billing_interval: billingInterval },
+    });
+
+    if (orderError || !order) {
+      setCheckoutError(order?.error || "Couldn't start checkout — please try again.");
+      setCheckoutLoadingPlan(null);
+      return;
+    }
+
+    const rzp = new window.Razorpay({
+      key: order.key_id,
+      amount: order.amount,
+      currency: order.currency,
+      order_id: order.order_id,
+      name: "LytningFocus",
+      description: `${planKey === "premium" ? "Pro" : "Basic"} — ${billingInterval === "yearly" ? "Yearly" : "Monthly"}`,
+      theme: { color: "#8b5cf6" },
+      handler: function () {
+        // The frontend NEVER grants premium itself on this callback — it
+        // only means the checkout popup completed successfully from the
+        // user's side. The actual account upgrade only happens once
+        // Razorpay's webhook independently confirms the payment
+        // server-side, which is the only thing that calls
+        // grant_subscription_plan(). This just tells the person to expect
+        // it shortly, and refreshes to pick it up once it lands.
+        setCheckoutLoadingPlan(null);
+        alert("Payment received! Your plan will update within a few seconds — refreshing now.");
+        setTimeout(() => window.location.reload(), 1500);
+      },
+      modal: {
+        ondismiss: function () {
+          setCheckoutLoadingPlan(null);
+        },
+      },
+    });
+
+    rzp.on("payment.failed", function (response) {
+      setCheckoutError(`Payment failed: ${response.error.description || "please try again."}`);
+      setCheckoutLoadingPlan(null);
+    });
+
+    rzp.open();
+  }
 
   useEffect(() => {
     (async () => {
@@ -11709,6 +11779,14 @@ function Pricing() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-10">
+      {checkoutError && (
+        <div className="max-w-lg mx-auto bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+          <p className="text-sm text-red-400">{checkoutError}</p>
+          <button onClick={() => setCheckoutError("")} className="text-red-400 hover:text-red-300 shrink-0">
+            <X size={14} />
+          </button>
+        </div>
+      )}
       <div className="text-center">
         <h1 className="text-3xl font-bold text-[var(--text-primary)]">Simple pricing</h1>
         <p className="text-sm text-[var(--text-secondary)] mt-1">Everything you need to study is free. Upgrade when you need more.</p>
@@ -11791,18 +11869,16 @@ function Pricing() {
             </ul>
             {plan.cta && plan.key !== "free" && (
               <button
-                disabled
-                title={!isCurrent && plan.key !== "free" ? "Payment processing isn't connected yet" : undefined}
+                onClick={() => !isCurrent && handleUpgradeClick(plan.key === "pro" ? "premium" : plan.key, plan.key === "pro" ? proBilling : "monthly")}
+                disabled={isCurrent || checkoutLoadingPlan === plan.key}
                 className={
-                  "w-full text-sm font-medium py-2.5 rounded-xl mt-5 transition-colors cursor-default " +
+                  "w-full text-sm font-medium py-2.5 rounded-xl mt-5 transition-colors " +
                   (isCurrent
-                    ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
-                    : plan.key === "free"
-                    ? "bg-[var(--surface-2)] text-[var(--text-muted)]"
-                    : "bg-[rgb(var(--accent-rgb)/0.2)] text-[var(--accent-text)] border border-[rgb(var(--accent-rgb)/0.4)] cursor-not-allowed")
+                    ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 cursor-default"
+                    : "bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white disabled:opacity-60 disabled:cursor-wait")
                 }
               >
-                {isCurrent ? "Current Plan" : plan.cta}
+                {isCurrent ? "Current Plan" : checkoutLoadingPlan === plan.key ? "Opening checkout..." : plan.cta}
               </button>
             )}
           </GlowCard>
