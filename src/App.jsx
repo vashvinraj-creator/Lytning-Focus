@@ -15019,12 +15019,13 @@ export default function StudyFlowAI() {
   useEffect(() => {
     if (!user) return;
     async function loadPendingCount() {
-      const { count, error } = await supabase
+      const { data, error } = await supabase
         .from("friend_requests")
-        .select("id", { count: "exact", head: true })
+        .select("id")
         .eq("receiver_id", user.id)
         .eq("status", "pending");
-      if (!error) setPendingFriendRequests(count || 0);
+      if (!error) setPendingFriendRequests((data || []).length);
+      else console.error("Failed to load pending friend requests:", error);
     }
     loadPendingCount();
     // Re-check whenever the person navigates to the Friends tab (catches
