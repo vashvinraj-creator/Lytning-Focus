@@ -11588,7 +11588,7 @@ function Toggle({ checked, onChange }) {
 }
 
 const PRICING_FREE_FEATURES = [
-  { text: "Focus Timer", sub: "2 hr XP daily cap" },
+  { text: "Focus Timer", sub: "2 hr daily XP cap" },
   "Tasks — up to 7",
   "Statistics — 2 weeks",
   "Growth — Default",
@@ -11600,7 +11600,7 @@ const PRICING_FREE_FEATURES = [
 ];
 
 const PRICING_BASIC_FEATURES = [
-  { text: "Focus Timer", sub: "4 hr XP daily cap" },
+  { text: "Focus Timer", sub: "4 hr daily XP cap" },
   "Ad-free study space",
   "Tasks — up to 14",
   "To-Do List — up to 5 lists, 10 tasks each",
@@ -11613,7 +11613,7 @@ const PRICING_BASIC_FEATURES = [
 ];
 
 const PRICING_PREMIUM_FEATURES = [
-  { text: "Focus Timer", sub: "7 hr XP daily cap" },
+  { text: "Focus Timer", sub: "7 hr daily XP cap" },
   "Habit Tracker",
   "Tasks — unlimited",
   "Statistics — full history",
@@ -11635,7 +11635,7 @@ const PRICING_PREMIUM_FEATURES = [
 // gets it.
 const PRICING_YEARLY_FEATURES = [...PRICING_PREMIUM_FEATURES, { text: "Streak Restore — 6 per year", exclusive: true }];
 
-function Pricing() {
+function Pricing({ goToLegal }) {
   const [myTier, setMyTier] = useState(null); // null while loading — avoids Free wrongly flashing as "current" before the real tier loads
   const [myBillingInterval, setMyBillingInterval] = useState(null); // "monthly" | "yearly" | null — only meaningful when myTier === "premium"
   const [proBilling, setProBilling] = useState("monthly"); // "monthly" | "yearly" — toggle inside the single Pro card
@@ -11816,6 +11816,9 @@ function Pricing() {
       <div className="text-center">
         <h1 className="text-3xl font-bold text-[var(--text-primary)]">Simple pricing</h1>
         <p className="text-sm text-[var(--text-secondary)] mt-1">Everything you need to study is free. Upgrade when you need more.</p>
+        <p className="text-xs text-[var(--text-muted)] mt-2 flex items-center justify-center gap-1.5">
+          <Check size={13} className="text-emerald-400" /> No auto-renewal — cancel anytime, keep access until your period ends
+        </p>
       </div>
 
       <div className="grid sm:grid-cols-3 gap-4">
@@ -11946,6 +11949,14 @@ function Pricing() {
           </table>
         </GlowCard>
       </div>
+
+      <p className="text-center text-xs text-[var(--text-faint)]">
+        By upgrading, you agree to our{" "}
+        <button onClick={() => goToLegal && goToLegal()} className="text-[var(--accent-text)] hover:underline">
+          Terms & Refund Policy
+        </button>
+        .
+      </p>
     </div>
   );
 }
@@ -13566,6 +13577,107 @@ const ABOUT_TOPICS = [
   },
 ];
 
+const LEGAL_SECTIONS = [
+  {
+    id: "terms",
+    title: "Terms of Service",
+    content: `Last updated: September 2026
+
+By using Lytning Focus, you agree to these terms.
+
+**What we offer**
+Lytning Focus is a study productivity app with three plans: Free, Basic, and Pro (available monthly or yearly). Each plan includes specific features and limits, all listed on our Pricing page.
+
+**How billing works**
+Payments for Basic and Pro are one-time charges for a fixed period (one month or one year) — we do not auto-charge your card again when that period ends. When your paid period is about to end, you'll need to manually renew if you want to continue at that tier. If you don't renew, your account automatically reverts to Free once the period ends — you keep all your data, you just lose access to paid-tier features and limits.
+
+**Cancelling**
+You can cancel anytime from Account Settings. Cancelling simply stops your plan from being treated as active going forward — since nothing auto-renews in the first place, cancelling mainly affects how your account is displayed and ensures you won't be prompted to renew. You keep full access to your paid tier until your current period ends, exactly as if you hadn't cancelled.
+
+**Account termination**
+We may suspend or terminate accounts that violate these terms, abuse the platform, or engage in fraudulent payment activity. You may delete your own account at any time from Account Settings — this permanently removes your data with no way to restore it.
+
+**Acceptable use**
+Don't use Lytning Focus to violate any law, harass others, attempt to bypass plan limits through technical exploitation, or resell/redistribute access to your account.
+
+**Limitation of liability**
+Lytning Focus is provided "as is." We aim for high reliability but don't guarantee uninterrupted access. We're not liable for indirect damages arising from use of the service, to the extent permitted by law.
+
+**Changes to these terms**
+We may update these terms occasionally. Continued use after changes means you accept the updated terms.
+
+**Contact**
+Questions about these terms can be sent through the Feedback page in Settings.`,
+  },
+  {
+    id: "refund",
+    title: "Refund Policy",
+    content: `**7-day refund window**
+If you're not satisfied with a paid plan, you can request a full refund within 7 days of your purchase date — no questions asked, for your first subscription to a given tier.
+
+**What's covered**
+- Your very first payment for Basic or Pro (monthly or yearly), within 7 days of that specific charge.
+
+**What's not covered**
+- Renewal payments (when you manually re-subscribe after a previous period ended) are not eligible for this 7-day window, since you're knowingly re-purchasing a service you've already used before.
+- Refund requests made after the 7-day window has passed.
+- Partial refunds for unused time if you cancel partway through a period — cancelling simply means you won't be prompted to renew; you keep access for the time you already paid for, and we don't pro-rate refunds for the remaining days.
+
+**How to request a refund**
+Send a message through the Feedback page in Settings within your 7-day window, including your account email and the approximate date of payment. We aim to process eligible refunds within 5-7 business days back to your original payment method via Razorpay.
+
+**Failed or duplicate payments**
+If you were charged more than once for the same purchase due to a technical error, or a payment failed but your card was still charged, contact us immediately through Feedback — these are corrected promptly regardless of the 7-day window, since they're our error, not a change of mind.`,
+  },
+];
+
+function LegalPage({ onBack, initialSection }) {
+  const [openId, setOpenId] = useState(initialSection || "terms");
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
+  return (
+    <div className="max-w-2xl space-y-5">
+      <button onClick={onBack} className="text-sm text-[var(--accent-text)] hover:brightness-110 flex items-center gap-1">
+        <ChevronLeft size={15} /> Back
+      </button>
+
+      <div className="flex items-center gap-3">
+        <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] flex items-center justify-center glow-accent-30 shrink-0">
+          <FileText size={19} className="text-white" />
+        </div>
+        <div>
+          <h1 className="text-xl font-semibold text-[var(--text-primary)]">Terms & Refund Policy</h1>
+          <p className="text-sm text-[var(--text-secondary)] mt-0.5">Clear, plain-language terms — no legal jargon maze.</p>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {LEGAL_SECTIONS.map((section) => {
+          const open = openId === section.id;
+          return (
+            <GlowCard key={section.id} className="!p-0 overflow-hidden">
+              <button onClick={() => setOpenId(open ? null : section.id)} className="w-full flex items-center gap-3 px-4 py-3.5 text-left">
+                <p className="text-sm font-medium text-[var(--text-primary)] flex-1">{section.title}</p>
+                <ChevronDown size={15} className={"text-[var(--text-muted)] shrink-0 transition-transform duration-200 " + (open ? "rotate-180" : "")} />
+              </button>
+              {open && (
+                <div className="px-4 pb-4">
+                  <p className="text-sm text-[var(--text-secondary)] leading-relaxed whitespace-pre-line">
+                    {section.content.split("**").map((chunk, i) => (i % 2 === 1 ? <strong key={i} className="text-[var(--text-primary)]">{chunk}</strong> : chunk))}
+                  </p>
+                </div>
+              )}
+            </GlowCard>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function AboutPage({ onBack }) {
   const [openIndex, setOpenIndex] = useState(null);
 
@@ -13972,6 +14084,34 @@ function AccountSettingsPage({ onBack, onLogout }) {
   const [dobSuccess, setDobSuccess] = useState("");
   const [dobError, setDobError] = useState("");
   const [dobChangeStatus, setDobChangeStatus] = useState(null); // { has_dob, can_change, next_change_available_at }
+  const [subStatus, setSubStatus] = useState(null); // { plan, billing_interval, status, current_period_end, cancelled_at, will_renew } | null
+  const [subActionLoading, setSubActionLoading] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+
+  useEffect(() => {
+    supabase.rpc("get_my_subscription_status").then(({ data }) => setSubStatus(data));
+  }, []);
+
+  async function handleCancelSubscription() {
+    setSubActionLoading(true);
+    const { error } = await supabase.rpc("cancel_my_subscription");
+    setSubActionLoading(false);
+    setShowCancelConfirm(false);
+    if (!error) {
+      const { data } = await supabase.rpc("get_my_subscription_status");
+      setSubStatus(data);
+    }
+  }
+
+  async function handleReactivateSubscription() {
+    setSubActionLoading(true);
+    const { error } = await supabase.rpc("reactivate_my_subscription");
+    setSubActionLoading(false);
+    if (!error) {
+      const { data } = await supabase.rpc("get_my_subscription_status");
+      setSubStatus(data);
+    }
+  }
 
 
   useEffect(() => {
@@ -14291,6 +14431,66 @@ function AccountSettingsPage({ onBack, onLogout }) {
             </button>
           </GlowCard>
 
+          {subStatus && subStatus.plan !== "free" && (
+            <GlowCard>
+              <p className="text-sm font-medium text-[var(--text-primary)] mb-1">Manage subscription</p>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xs bg-[rgb(var(--accent-rgb)/0.15)] text-[var(--accent-text)] px-2 py-0.5 rounded-full font-medium">
+                  {subStatus.plan === "premium" ? "Pro" : "Basic"} {subStatus.billing_interval === "yearly" ? "· Yearly" : "· Monthly"}
+                </span>
+                {!subStatus.will_renew && <span className="text-xs bg-amber-500/15 text-amber-400 px-2 py-0.5 rounded-full font-medium">Cancelled</span>}
+              </div>
+              <p className="text-xs text-[var(--text-muted)] mb-4">
+                {subStatus.will_renew
+                  ? `Your plan is active. Since nothing auto-charges, you'll need to manually renew after ${new Date(subStatus.current_period_end).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })} to keep your paid features.`
+                  : `You've cancelled — you'll keep full access until ${new Date(subStatus.current_period_end).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}, then your account moves to Free automatically.`}
+              </p>
+              {subStatus.will_renew ? (
+                <button
+                  onClick={() => setShowCancelConfirm(true)}
+                  className="w-full text-sm font-medium py-2.5 rounded-xl border border-red-900/40 text-red-400 hover:bg-red-500/5 transition-colors"
+                >
+                  Cancel subscription
+                </button>
+              ) : (
+                <button
+                  onClick={handleReactivateSubscription}
+                  disabled={subActionLoading}
+                  className="w-full bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-50 text-white text-sm font-medium py-2.5 rounded-xl transition-colors"
+                >
+                  {subActionLoading ? "Reactivating..." : "Reactivate subscription"}
+                </button>
+              )}
+            </GlowCard>
+          )}
+
+          {showCancelConfirm && (
+            <div className="fixed inset-0 md:left-60 lg:left-64 z-[400] flex items-center justify-center p-4" onClick={() => setShowCancelConfirm(false)}>
+              <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+              <div onClick={(e) => e.stopPropagation()} className="relative bg-[var(--surface-solid)] border border-[var(--border)] rounded-3xl p-6 max-w-sm w-full text-center shadow-xl">
+                <p className="text-base font-semibold text-[var(--text-primary)] mb-2">Cancel your subscription?</p>
+                <p className="text-sm text-[var(--text-muted)] mb-6">
+                  You'll keep full access until {subStatus && new Date(subStatus.current_period_end).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })} — nothing is lost right away, and you can reactivate anytime before then.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowCancelConfirm(false)}
+                    className="flex-1 bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-secondary-strong)] text-sm font-medium py-2.5 rounded-xl transition-colors"
+                  >
+                    Never mind
+                  </button>
+                  <button
+                    onClick={handleCancelSubscription}
+                    disabled={subActionLoading}
+                    className="flex-1 bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white text-sm font-medium py-2.5 rounded-xl transition-colors"
+                  >
+                    {subActionLoading ? "Cancelling..." : "Yes, cancel"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <GlowCard>
             <div className="flex items-center justify-between mb-1">
               <p className="text-sm font-medium text-[var(--text-primary)]">Username</p>
@@ -14465,6 +14665,7 @@ function Settings({ user, onLogout, theme, onSelectTheme, soundEnabled, onToggle
   const [showFeedback, setShowFeedback] = useState(initialView === "feedback");
   const [showFeedbackAdmin, setShowFeedbackAdmin] = useState(initialView === "feedbackAdmin");
   const [showAbout, setShowAbout] = useState(initialView === "about");
+  const [showLegal, setShowLegal] = useState(initialView === "legal");
   const isAdmin = user?.email === "vashvinraj@gmail.com";
   const [showDeleteWarning, setShowDeleteWarning] = useState(false); // step 1: the "are you sure" warning
   const [showDeleteTypeConfirm, setShowDeleteTypeConfirm] = useState(false); // step 2: type CONFIRM
@@ -14488,6 +14689,9 @@ function Settings({ user, onLogout, theme, onSelectTheme, soundEnabled, onToggle
 
   if (showAbout) {
     return <AboutPage onBack={() => setShowAbout(false)} />;
+  }
+  if (showLegal) {
+    return <LegalPage onBack={() => setShowLegal(false)} />;
   }
   if (showAppearance) {
     return <AppearancePage theme={theme} onSelectTheme={onSelectTheme} error={themeSoundError} onBack={() => setShowAppearance(false)} goTo={goTo} />;
@@ -14639,6 +14843,19 @@ function Settings({ user, onLogout, theme, onSelectTheme, soundEnabled, onToggle
           <div className="flex-1">
             <p className="text-sm font-medium text-[var(--text-primary)]">About & How It Works</p>
             <p className="text-xs text-[var(--text-muted)] mt-0.5">A full guide to every feature — XP, levels, caps, and more</p>
+          </div>
+          <ChevronRight size={16} className="text-[var(--text-faint)] group-hover:text-[var(--accent-text)] group-hover:translate-x-0.5 transition-all shrink-0" />
+        </button>
+      </GlowCard>
+
+      <GlowCard>
+        <button onClick={() => setShowLegal(true)} className="w-full flex items-center gap-3 text-left group">
+          <div className="h-9 w-9 rounded-xl bg-[var(--surface-2)] flex items-center justify-center shrink-0">
+            <FileText size={16} className="text-[var(--text-secondary-strong)]" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-[var(--text-primary)]">Terms & Refund Policy</p>
+            <p className="text-xs text-[var(--text-muted)] mt-0.5">Billing, cancellation, and refund details</p>
           </div>
           <ChevronRight size={16} className="text-[var(--text-faint)] group-hover:text-[var(--accent-text)] group-hover:translate-x-0.5 transition-all shrink-0" />
         </button>
@@ -15663,7 +15880,14 @@ export default function StudyFlowAI() {
         {effectiveTab === "friends" && <Friends refreshKey={statsRefreshKey} goTo={setTab} />}
         {effectiveTab === "leaderboard" && <Leaderboard refreshKey={statsRefreshKey} />}
         {effectiveTab === "groups" && <Groups refreshKey={statsRefreshKey} goTo={setTab} />}
-        {effectiveTab === "pricing" && <Pricing />}
+        {effectiveTab === "pricing" && (
+          <Pricing
+            goToLegal={() => {
+              setSettingsInitialView("legal");
+              setTab("settings");
+            }}
+          />
+        )}
         {effectiveTab === "settings" && (
           <Settings
             user={user}
