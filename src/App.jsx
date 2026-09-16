@@ -1463,7 +1463,7 @@ function formatSessionTime(dateStr) {
 
 /* ---------------------------- Dashboard ---------------------------- */
 
-function Dashboard({ user, goTo, refreshKey }) {
+function Dashboard({ user, goTo, refreshKey, goToAbout }) {
   const [sessions, setSessions] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1479,6 +1479,7 @@ function Dashboard({ user, goTo, refreshKey }) {
   const [giftError, setGiftError] = useState("");
   const [xpToastMessage, setXpToastMessage] = useState("");
   const [xpToastKey, setXpToastKey] = useState(0);
+  const [showAboutPrompt, setShowAboutPrompt] = useState(false);
 
   useEffect(() => {
     loadSessions();
@@ -1487,11 +1488,22 @@ function Dashboard({ user, goTo, refreshKey }) {
     (async () => {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) return;
-      const { data } = await supabase.from("profiles").select("premium_tier").eq("user_id", authUser.id).maybeSingle();
+      const { data } = await supabase.from("profiles").select("premium_tier, has_seen_about_prompt").eq("user_id", authUser.id).maybeSingle();
       setMyTier(data?.premium_tier || "free");
+      setShowAboutPrompt(data?.has_seen_about_prompt === false);
     })();
     supabase.rpc("get_my_birthday_status").then(({ data }) => setBirthdayStatus(data));
   }, [refreshKey]);
+
+  // Persisted server-side, not just hidden in this session — once
+  // dismissed (by clicking through OR closing it), it stays gone across
+  // devices and future visits, since by then the person has either seen
+  // the guide or actively said they don't need it.
+  async function dismissAboutPrompt() {
+    setShowAboutPrompt(false);
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (authUser) await supabase.from("profiles").update({ has_seen_about_prompt: true }).eq("user_id", authUser.id);
+  }
 
   async function handleOpenGift() {
     setClaimingGift(true);
@@ -1671,6 +1683,24 @@ function Dashboard({ user, goTo, refreshKey }) {
           </div>
         )}
       </div>
+
+      {showAboutPrompt && (
+        <div className="bg-gradient-to-r from-[rgb(var(--accent-rgb)/0.12)] to-[rgb(var(--accent-rgb)/0.04)] border border-[rgb(var(--accent-rgb)/0.3)] rounded-xl px-4 py-3 flex items-center gap-3">
+          <HelpCircle size={18} className="text-[var(--accent-text)] shrink-0" />
+          <button
+            onClick={() => {
+              dismissAboutPrompt();
+              goToAbout && goToAbout();
+            }}
+            className="flex-1 text-left text-sm text-[var(--text-secondary-strong)] hover:text-[var(--text-primary)] transition-colors"
+          >
+            New here, or still figuring out how everything works? <span className="text-[var(--accent-text)] font-medium">Take a quick look at the guide →</span>
+          </button>
+          <button onClick={dismissAboutPrompt} className="text-[var(--text-faint)] hover:text-[var(--text-primary)] shrink-0 p-1 -m-1">
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <GlowCard>
@@ -11558,8 +11588,8 @@ function Toggle({ checked, onChange }) {
 }
 
 const PRICING_FREE_FEATURES = [
-  { text: "Focus Timer", sub: "2 hr daily cap" },
-  "Tasks — up to 10",
+  { text: "Focus Timer", sub: "2 hr XP daily cap" },
+  "Tasks — up to 7",
   "Statistics — 2 weeks",
   "Growth — Default",
   "Leaderboard & Achievements",
@@ -11570,9 +11600,9 @@ const PRICING_FREE_FEATURES = [
 ];
 
 const PRICING_BASIC_FEATURES = [
-  { text: "Focus Timer", sub: "4 hr daily cap" },
+  { text: "Focus Timer", sub: "4 hr XP daily cap" },
   "Ad-free study space",
-  "Tasks — up to 20",
+  "Tasks — up to 14",
   "To-Do List — up to 5 lists, 10 tasks each",
   "Events — up to 5/month",
   "Statistics — last 4 weeks",
@@ -11583,7 +11613,7 @@ const PRICING_BASIC_FEATURES = [
 ];
 
 const PRICING_PREMIUM_FEATURES = [
-  { text: "Focus Timer", sub: "7 hr daily cap" },
+  { text: "Focus Timer", sub: "7 hr XP daily cap" },
   "Habit Tracker",
   "Tasks — unlimited",
   "Statistics — full history",
@@ -11750,7 +11780,7 @@ function Pricing() {
   // competitor pricing page — one row per feature, one column per plan.
   const COMPARISON_ROWS = [
     { label: "Focus Timer (Stopwatch, Timer, Pomodoro)", values: [true, true, true] },
-    { label: "Tasks", values: ["Up to 10", "Up to 20", "Unlimited"] },
+    { label: "Tasks", values: ["7", "14", "Unlimited"] },
     { label: "Growth levels & streaks", values: [true, true, true] },
     { label: "Friends", values: [true, true, true] },
     { label: "Leaderboard & Achievements", values: [true, true, true] },
@@ -13430,7 +13460,7 @@ const ABOUT_TOPICS = [
     emoji: "\u2705",
     title: "Tasks",
     content:
-      "Your simple one-time to-do list. Add something, do it, check it off \u2014 and boom, +150 XP \ud83c\udf89 Free accounts can hold 10 tasks at a time (even finished ones count, so clear some out if you're full), Basic gets 20, and Pro doesn't have to think about it at all \u2014 unlimited.",
+      "Your simple one-time to-do list. Add something, do it, check it off \u2014 and boom, +150 XP \ud83c\udf89 Free accounts can hold 7 tasks at a time (even finished ones count, so clear some out if you're full), Basic gets 14, and Pro doesn't have to think about it at all \u2014 unlimited.",
   },
   {
     icon: Layers,
@@ -14848,6 +14878,134 @@ function AuthOverlays({ authModalOpen, setAuthModalOpen, authMode, setAuthMode, 
   );
 }
 
+// Always-mounted, regardless of which tab is active — this is what lets an
+// achievement notification pop up no matter where the person currently is
+// in the app, rather than only being detected when they happen to visit
+// the Achievements page itself.
+function AchievementWatcher({ refreshKey, goTo }) {
+  const [popup, setPopup] = useState(null); // the achievement def just detected, or null
+  const dismissTimerRef = useRef(null);
+
+  useEffect(() => {
+    checkForNewAchievements();
+    return () => {
+      if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey]);
+
+  async function checkForNewAchievements() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const [sessionsRes, statsRes, earnedRes, friendsRes, groupContribRes, fullCompletionRes, shareRes, veteranRes, dayRankRes, weekRankRes, monthRankRes, premiumRes, cappedFocusXPRes] =
+      await Promise.all([
+        supabase.from("study_sessions").select("focused_seconds, completed_at"),
+        supabase.from("user_task_stats").select("lifetime_tasks_completed, lifetime_task_xp, lifetime_group_xp").eq("user_id", user.id).maybeSingle(),
+        supabase.from("user_achievements").select("*").eq("user_id", user.id),
+        supabase.from("friend_requests").select("id").eq("status", "accepted").or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`),
+        supabase.rpc("get_my_max_group_contribution_minutes"),
+        supabase.rpc("get_my_full_completion_count"),
+        supabase.rpc("get_my_share_count"),
+        supabase.rpc("get_my_longest_group_membership_days"),
+        supabase.rpc("get_my_leaderboard_rank", { p_period: "day" }),
+        supabase.rpc("get_my_leaderboard_rank", { p_period: "week" }),
+        supabase.rpc("get_my_leaderboard_rank", { p_period: "month" }),
+        supabase.rpc("get_my_ever_been_premium"),
+        supabase.rpc("get_my_capped_focus_xp"),
+      ]);
+
+    const sess = sessionsRes.data || [];
+    const tasksDone = statsRes.data?.lifetime_tasks_completed || 0;
+    const taskXP = statsRes.data?.lifetime_task_xp || 0;
+    const groupXP = statsRes.data?.lifetime_group_xp || 0;
+
+    const earnedMap = {};
+    (earnedRes.data || []).forEach((r) => {
+      earnedMap[r.achievement_key] = r;
+    });
+    const earnedKeys = new Set(Object.keys(earnedMap));
+
+    const stats = computeStudyStats(sess);
+    const totalMinutes = Math.floor(stats.totalSeconds / 60);
+    const cappedFocusXP = cappedFocusXPRes.data || 0;
+    const totalXPFromEarned = Object.values(earnedMap).reduce((sum, r) => sum + (r.xp_awarded || 0), 0);
+    const level = computeGrowth(cappedFocusXP + taskXP + groupXP + totalXPFromEarned).current.level;
+
+    const ctx = {
+      streak: stats.streak,
+      level,
+      tasksCompleted: tasksDone,
+      taskXP,
+      groupXP,
+      totalMinutes,
+      cappedFocusXP,
+      totalXPRaw: cappedFocusXP + taskXP + groupXP + totalXPFromEarned,
+      friendCount: (friendsRes.data || []).length,
+      maxGroupContribMinutes: groupContribRes.data || 0,
+      fullCompletionCount: fullCompletionRes.data || 0,
+      shareCount: shareRes.data || 0,
+      longestGroupMembershipDays: veteranRes.data || 0,
+      dayRank: dayRankRes.data ?? null,
+      weekRank: weekRankRes.data ?? null,
+      monthRank: monthRankRes.data ?? null,
+      everBeenPremium: premiumRes.data || false,
+      earnedKeys,
+    };
+
+    // "Newly claimable" means the condition is met but it hasn't been
+    // claimed yet AND we haven't already shown a popup for it before —
+    // that second check is what stops the same notification from
+    // reappearing every time refreshKey changes, since meeting the
+    // condition doesn't remove it from being claimable until actually
+    // claimed on the Achievements page.
+    const seenStorageKey = `lf_achievement_notified_${user.id}`;
+    const alreadyNotified = new Set(JSON.parse(localStorage.getItem(seenStorageKey) || "[]"));
+
+    const newlyClaimable = ACHIEVEMENTS.find((a) => !earnedKeys.has(a.key) && !alreadyNotified.has(a.key) && a.check(ctx));
+
+    if (newlyClaimable) {
+      alreadyNotified.add(newlyClaimable.key);
+      localStorage.setItem(seenStorageKey, JSON.stringify([...alreadyNotified]));
+      setPopup(newlyClaimable);
+      if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+      dismissTimerRef.current = setTimeout(() => setPopup(null), 8000);
+    }
+  }
+
+  if (!popup) return null;
+
+  return (
+    <div className="fixed top-4 right-4 left-4 sm:left-auto z-[500] sm:max-w-xs">
+      <button
+        onClick={() => {
+          setPopup(null);
+          goTo && goTo("achievements");
+        }}
+        className="w-full text-left bg-[var(--surface-solid)] border border-amber-500/40 rounded-2xl p-4 shadow-[0_0_40px_-8px_rgba(245,158,11,0.5)] flex items-start gap-3 transition-transform hover:scale-[1.02]"
+      >
+        <span className="text-2xl shrink-0">🏆</span>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-400 mb-0.5">Achievement Unlocked!</p>
+          <p className="text-sm font-medium text-[var(--text-primary)] truncate">{popup.title}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">Tap to claim +{popup.xp.toLocaleString()} XP</p>
+        </div>
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            setPopup(null);
+          }}
+          className="text-[var(--text-faint)] hover:text-[var(--text-primary)] shrink-0 p-1 -m-1"
+        >
+          <X size={14} />
+        </div>
+      </button>
+    </div>
+  );
+}
+
 export default function StudyFlowAI() {
   const [screen, setScreen] = useState("checking"); // "checking" | "landing" | "auth" | "app"
   const [authMode, setAuthMode] = useState("login");
@@ -15468,8 +15626,20 @@ export default function StudyFlowAI() {
         </div>
       )}
 
+      <AchievementWatcher refreshKey={statsRefreshKey} goTo={setTab} />
+
       <main className={"flex-1 min-w-0 px-5 md:px-8 pt-20 md:pt-8 pb-24 md:pb-8 " + (effectiveTab === "habits" ? "max-w-7xl" : "max-w-5xl")}>
-        {effectiveTab === "dashboard" && <Dashboard user={user} goTo={setTab} refreshKey={statsRefreshKey} />}
+        {effectiveTab === "dashboard" && (
+          <Dashboard
+            user={user}
+            goTo={setTab}
+            refreshKey={statsRefreshKey}
+            goToAbout={() => {
+              setSettingsInitialView("about");
+              setTab("settings");
+            }}
+          />
+        )}
         <div className={effectiveTab === "focus" ? "" : "hidden"}>
           <Focus onSessionSaved={handleSessionSaved} isActive={effectiveTab === "focus"} />
         </div>
