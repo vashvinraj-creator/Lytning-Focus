@@ -11665,19 +11665,9 @@ function Pricing({ goToLegal }) {
 
   async function handleCancelSubscription() {
     setSubActionLoading(true);
-    const { error } = await supabase.rpc("cancel_my_subscription");
+    const { error } = await supabase.functions.invoke("cancel-razorpay-subscription");
     setSubActionLoading(false);
     setShowCancelConfirm(false);
-    if (!error) {
-      const { data } = await supabase.rpc("get_my_subscription_status");
-      setSubStatus(data);
-    }
-  }
-
-  async function handleReactivateSubscription() {
-    setSubActionLoading(true);
-    const { error } = await supabase.rpc("reactivate_my_subscription");
-    setSubActionLoading(false);
     if (!error) {
       const { data } = await supabase.rpc("get_my_subscription_status");
       setSubStatus(data);
@@ -11707,23 +11697,21 @@ function Pricing({ goToLegal }) {
       return;
     }
 
-    const { data: order, error: orderError } = await supabase.functions.invoke("create-razorpay-order", {
+    const { data: subData, error: subError } = await supabase.functions.invoke("create-razorpay-subscription", {
       body: { plan: planKey, billing_interval: billingInterval },
     });
 
-    if (orderError || !order) {
-      setCheckoutError(order?.error || "Couldn't start checkout — please try again.");
+    if (subError || !subData) {
+      setCheckoutError(subData?.error || "Couldn't start checkout — please try again.");
       setCheckoutLoadingPlan(null);
       return;
     }
 
     const rzp = new window.Razorpay({
-      key: order.key_id,
-      amount: order.amount,
-      currency: order.currency,
-      order_id: order.order_id,
+      key: subData.key_id,
+      subscription_id: subData.razorpay_subscription_id,
       name: "LytningFocus",
-      description: `${planKey === "premium" ? "Pro" : "Basic"} — ${billingInterval === "yearly" ? "Yearly" : "Monthly"}`,
+      description: `${planKey === "premium" ? "Pro" : "Basic"} — ${billingInterval === "yearly" ? "Yearly" : "Monthly"} (auto-renews until cancelled)`,
       theme: { color: "#8b5cf6" },
       handler: function () {
         // The frontend NEVER grants premium itself on this callback — it
@@ -11859,7 +11847,7 @@ function Pricing({ goToLegal }) {
         <h1 className="text-3xl font-bold text-[var(--text-primary)]">Simple pricing</h1>
         <p className="text-sm text-[var(--text-secondary)] mt-1">Everything you need to study is free. Upgrade when you need more.</p>
         <p className="text-xs text-[var(--text-muted)] mt-2 flex items-center justify-center gap-1.5">
-          <Check size={13} className="text-emerald-400" /> No auto-renewal — cancel anytime, keep access until your period ends
+          <Check size={13} className="text-emerald-400" /> Auto-renews until you cancel — cancel anytime, keep access until your period ends
         </p>
       </div>
 
@@ -11954,12 +11942,18 @@ function Pricing({ goToLegal }) {
             )}
             {isCurrent && subStatus && subStatus.plan === (plan.key === "pro" ? "premium" : plan.key) && (
               <div className="mt-3 pt-3 border-t border-[var(--border-subtle)]">
-                {!subStatus.will_renew && (
+                {subStatus.status === "past_due" && (
+                  <p className="text-xs bg-red-500/15 text-red-400 px-2 py-1.5 rounded-lg mb-2 text-center font-medium">⚠️ Renewal payment failed — Razorpay is retrying automatically. Update your card if this continues.</p>
+                )}
+                {subStatus.status === "halted" && (
+                  <p className="text-xs bg-red-500/15 text-red-400 px-2 py-1.5 rounded-lg mb-2 text-center font-medium">Payment retries exhausted — access removed. Resubscribe to continue.</p>
+                )}
+                {!subStatus.will_renew && subStatus.status === "cancelled" && (
                   <p className="text-xs bg-amber-500/15 text-amber-400 px-2 py-1 rounded-lg mb-2 text-center font-medium">Cancelled — active until period end</p>
                 )}
                 <p className="text-[11px] text-[var(--text-faint)] text-center mb-2">
                   {subStatus.will_renew
-                    ? `Renew by ${new Date(subStatus.current_period_end).toLocaleDateString(undefined, { month: "short", day: "numeric" })} to keep this plan`
+                    ? `Renews automatically on ${new Date(subStatus.current_period_end).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
                     : `Access ends ${new Date(subStatus.current_period_end).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`}
                 </p>
                 {subStatus.will_renew ? (
@@ -11971,11 +11965,11 @@ function Pricing({ goToLegal }) {
                   </button>
                 ) : (
                   <button
-                    onClick={handleReactivateSubscription}
-                    disabled={subActionLoading}
+                    onClick={() => handleUpgradeClick(plan.key === "pro" ? "premium" : plan.key, plan.key === "pro" ? proBilling : "monthly")}
+                    disabled={checkoutLoadingPlan === plan.key}
                     className="w-full text-xs font-medium py-2 rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-50 text-white transition-colors"
                   >
-                    {subActionLoading ? "Reactivating..." : "Reactivate subscription"}
+                    {checkoutLoadingPlan === plan.key ? "Opening checkout..." : "Resubscribe"}
                   </button>
                 )}
               </div>
@@ -13686,10 +13680,10 @@ By using Lytning Focus, you agree to these terms.
 Lytning Focus is a study productivity app with three plans: Free, Basic, and Pro (available monthly or yearly). Each plan includes specific features and limits, all listed on our Pricing page.
 
 **How billing works**
-Payments for Basic and Pro are one-time charges for a fixed period (one month or one year) — we do not auto-charge your card again when that period ends. When your paid period is about to end, you'll need to manually renew if you want to continue at that tier. If you don't renew, your account automatically reverts to Free once the period ends — you keep all your data, you just lose access to paid-tier features and limits.
+Basic and Pro plans automatically renew on your billing cycle (monthly or yearly, matching what you selected) until you cancel — your card is charged again automatically at the start of each new period, using Razorpay's secure recurring billing. You'll always know your next renewal date on the Pricing page.
 
 **Cancelling**
-You can cancel anytime from Account Settings. Cancelling simply stops your plan from being treated as active going forward — since nothing auto-renews in the first place, cancelling mainly affects how your account is displayed and ensures you won't be prompted to renew. You keep full access to your paid tier until your current period ends, exactly as if you hadn't cancelled.
+You can cancel anytime from the Pricing page, under your current plan. Cancelling stops all future automatic charges — you keep full access to your paid tier until your current period ends, then your account automatically reverts to Free. You keep all your data either way, you just lose access to paid-tier features and limits after reverting. Cancelling does not refund your current period; see our Refund Policy for that.
 
 **Account termination**
 We may suspend or terminate accounts that violate these terms, abuse the platform, or engage in fraudulent payment activity. You may delete your own account at any time from Account Settings — this permanently removes your data with no way to restore it.
@@ -13718,7 +13712,7 @@ If you're not satisfied with a paid plan, you can request a full refund within 7
 **What's not covered**
 - Renewal payments (when you manually re-subscribe after a previous period ended) are not eligible for this 7-day window, since you're knowingly re-purchasing a service you've already used before.
 - Refund requests made after the 7-day window has passed.
-- Partial refunds for unused time if you cancel partway through a period — cancelling simply means you won't be prompted to renew; you keep access for the time you already paid for, and we don't pro-rate refunds for the remaining days.
+- Partial refunds for unused time if you cancel partway through a period — cancelling stops future automatic charges, but you keep access for the time you already paid for, and we don't pro-rate refunds for the remaining days of an already-charged period.
 
 **How to request a refund**
 Email ryanlighton7business@gmail.com within your 7-day window, with your account email and the approximate date of payment. We aim to process eligible refunds within 5-7 business days back to your original payment method via Razorpay.
