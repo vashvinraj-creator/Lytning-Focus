@@ -11908,6 +11908,13 @@ function Pricing({ goToLegal }) {
         <p className="text-xs text-[var(--text-muted)] mt-2 flex items-center justify-center gap-1.5">
           <Check size={13} className="text-emerald-400" /> Auto-renews until you cancel — cancel anytime, keep access until your period ends
         </p>
+        <p className="text-xs text-[var(--text-faint)] mt-1.5">
+          By upgrading, you agree to our{" "}
+          <button onClick={() => goToLegal && goToLegal()} className="text-[var(--accent-text)] hover:underline font-medium">
+            Terms & Refund Policy
+          </button>
+          .
+        </p>
       </div>
 
       <div className="grid sm:grid-cols-3 gap-4">
@@ -12092,14 +12099,6 @@ function Pricing({ goToLegal }) {
           </table>
         </GlowCard>
       </div>
-
-      <p className="text-center text-xs text-[var(--text-faint)]">
-        By upgrading, you agree to our{" "}
-        <button onClick={() => goToLegal && goToLegal()} className="text-[var(--accent-text)] hover:underline">
-          Terms & Refund Policy
-        </button>
-        .
-      </p>
     </div>
   );
 }
