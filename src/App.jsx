@@ -11946,7 +11946,7 @@ function Pricing({ goToLegal }) {
                   <p className="text-xs bg-red-500/15 text-red-400 px-2 py-1.5 rounded-lg mb-2 text-center font-medium">⚠️ Renewal payment failed — Razorpay is retrying automatically. Update your card if this continues.</p>
                 )}
                 {subStatus.status === "halted" && (
-                  <p className="text-xs bg-red-500/15 text-red-400 px-2 py-1.5 rounded-lg mb-2 text-center font-medium">Payment retries exhausted — access removed. Resubscribe to continue.</p>
+                  <p className="text-xs bg-red-500/15 text-red-400 px-2 py-1.5 rounded-lg mb-2 text-center font-medium">Payment retries exhausted — access removed.</p>
                 )}
                 {!subStatus.will_renew && subStatus.status === "cancelled" && (
                   <p className="text-xs bg-amber-500/15 text-amber-400 px-2 py-1 rounded-lg mb-2 text-center font-medium">Cancelled — active until period end</p>
@@ -11954,22 +11954,14 @@ function Pricing({ goToLegal }) {
                 <p className="text-[11px] text-[var(--text-faint)] text-center mb-2">
                   {subStatus.will_renew
                     ? `Renews automatically on ${new Date(subStatus.current_period_end).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
-                    : `Access ends ${new Date(subStatus.current_period_end).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`}
+                    : `Your usage ends on ${new Date(subStatus.current_period_end).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`}
                 </p>
-                {subStatus.will_renew ? (
+                {subStatus.will_renew && (
                   <button
                     onClick={() => setShowCancelConfirm(true)}
                     className="w-full text-xs font-medium py-2 rounded-lg border border-red-900/40 text-red-400 hover:bg-red-500/5 transition-colors"
                   >
                     Cancel subscription
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleUpgradeClick(plan.key === "pro" ? "premium" : plan.key, plan.key === "pro" ? proBilling : "monthly")}
-                    disabled={checkoutLoadingPlan === plan.key}
-                    className="w-full text-xs font-medium py-2 rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-50 text-white transition-colors"
-                  >
-                    {checkoutLoadingPlan === plan.key ? "Opening checkout..." : "Resubscribe"}
                   </button>
                 )}
               </div>
