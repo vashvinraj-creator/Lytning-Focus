@@ -473,10 +473,6 @@ function GlowCard({ children, className = "", glow = false, borderColor }) {
 // used anywhere a plan-based limit exists (habits, events, lists, groups,
 // etc.) so upgrading is always one visible tap away. Pass max={null} for a
 // tier with no cap (shows "Unlimited" instead, no button).
-// Reusable "current/max" usage indicator with an "Increase Limit" button —
-// used anywhere a plan-based limit exists (habits, events, lists, groups,
-// etc.) so upgrading is always one visible tap away. Pass max={null} for a
-// tier with no cap (shows "Unlimited" instead, no button).
 function LimitBadge({ current, max, goTo, label }) {
   if (max === null || max === undefined) {
     return (
@@ -11799,7 +11795,7 @@ function Pricing() {
           <GlowCard
             key={plan.key}
             glow={plan.highlight || isCurrent}
-            borderColor={isCurrent ? "rgb(52 211 153 / 0.6)" : plan.highlight ? `rgb(var(--accent-rgb) / 0.4)` : undefined}
+            borderColor={isCurrent ? "rgb(52 211 153 / 0.6)" : plan.highlight ? `rgb(var(--accent-rgb) / 0.9)` : undefined}
             className={"relative h-full flex flex-col " + (isCurrent ? "shadow-[0_0_30px_-8px_rgba(52,211,153,0.4)]" : "")}
           >
             {isCurrent && (
