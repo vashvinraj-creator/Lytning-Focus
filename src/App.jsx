@@ -11661,6 +11661,7 @@ function Pricing({ goToLegal }) {
 
   useEffect(() => {
     supabase.rpc("get_my_subscription_status").then(({ data }) => setSubStatus(data));
+    loadRazorpayScript(); // preload now, so it's already ready by the time someone clicks Upgrade
   }, []);
 
   async function handleCancelSubscription() {
@@ -11714,16 +11715,18 @@ function Pricing({ goToLegal }) {
       return;
     }
 
-    const scriptLoaded = await loadRazorpayScript();
+    const [scriptLoaded, { data: subData, error: subError }] = await Promise.all([
+      loadRazorpayScript(),
+      supabase.functions.invoke("create-razorpay-subscription", {
+        body: { plan: planKey, billing_interval: billingInterval },
+      }),
+    ]);
+
     if (!scriptLoaded) {
       setCheckoutError("Couldn't load the payment window — please check your connection and try again.");
       setCheckoutLoadingPlan(null);
       return;
     }
-
-    const { data: subData, error: subError } = await supabase.functions.invoke("create-razorpay-subscription", {
-      body: { plan: planKey, billing_interval: billingInterval },
-    });
 
     if (subError || !subData) {
       setCheckoutError(subData?.error || "Couldn't start checkout — please try again.");
@@ -11955,12 +11958,13 @@ function Pricing({ goToLegal }) {
                 onClick={() => !isCurrent && handleUpgradeClick(plan.key === "pro" ? "premium" : plan.key, plan.key === "pro" ? proBilling : "monthly")}
                 disabled={isCurrent || checkoutLoadingPlan === plan.key}
                 className={
-                  "w-full text-sm font-medium py-2.5 rounded-xl mt-5 transition-colors " +
+                  "w-full text-sm font-medium py-2.5 rounded-xl mt-5 transition-colors flex items-center justify-center gap-2 " +
                   (isCurrent
                     ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 cursor-default"
-                    : "bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white disabled:opacity-60 disabled:cursor-wait")
+                    : "bg-[var(--accent)] hover:bg-[var(--accent-hover)] active:scale-[0.98] text-white disabled:opacity-60 disabled:cursor-wait")
                 }
               >
+                {checkoutLoadingPlan === plan.key && <Loader2 size={15} className="animate-spin" />}
                 {isCurrent ? "Current Plan" : checkoutLoadingPlan === plan.key ? "Opening checkout..." : plan.cta}
               </button>
             )}
