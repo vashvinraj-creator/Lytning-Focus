@@ -23,7 +23,7 @@ import {
   Home, Timer, CheckSquare, BarChart3, Bot, Layers, Calendar, Settings as SettingsIcon,
   LogOut, Menu, X, Eye, EyeOff, Plus, Trash2, Play, Pause, RotateCcw, SkipForward,
   Send, Copy, Flame, Sparkles, ChevronRight, ChevronLeft, ChevronUp, ChevronDown, Check, Zap, Bell, User,
-  Lock, Mail, ArrowRight, TrendingUp, Clock, FileText, Crown, Loader2, AlertTriangle, Pencil, Users, Trophy, Search, Download, Image as ImageIcon, Smartphone, MessageSquare, UserX, Star, HelpCircle, Gift
+  Lock, Mail, ArrowRight, TrendingUp, Clock, FileText, Crown, Loader2, AlertTriangle, Pencil, Users, Trophy, Search, Download, Image as ImageIcon, Smartphone, MessageSquare, UserX, Star, HelpCircle, Gift, IndianRupee
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, LineChart, Line,
@@ -13762,12 +13762,16 @@ If you're not satisfied with a paid plan, you can request a full refund within 7
 - Your very first payment for Basic or Pro (monthly or yearly), within 7 days of that specific charge.
 
 **What's not covered**
-- Renewal payments (when you manually re-subscribe after a previous period ended) are not eligible for this 7-day window, since you're knowingly re-purchasing a service you've already used before.
+- Automatic renewal charges (when your subscription auto-renews for a new billing cycle) are not eligible for this 7-day window — it only applies to your very first payment for a given tier.
 - Refund requests made after the 7-day window has passed.
-- Partial refunds for unused time if you cancel partway through a period — cancelling stops future automatic charges, but you keep access for the time you already paid for, and we don't pro-rate refunds for the remaining days of an already-charged period.
 
 **How to request a refund**
-Email ryanlighton7business@gmail.com within your 7-day window, with your account email and the approximate date of payment. We aim to process eligible refunds within 5-7 business days back to your original payment method via Razorpay.
+Email ryanlighton7business@gmail.com within your 7-day window, including:
+- The email address your account is registered with
+- Which plan you purchased (Basic or Pro) and whether it was monthly or yearly
+- The approximate date you paid
+
+We aim to process eligible refunds within 5-7 business days back to your original payment method via Razorpay.
 
 **Failed or duplicate payments**
 If you were charged more than once for the same purchase due to a technical error, or a payment failed but your card was still charged, email ryanlighton7business@gmail.com immediately with your account email and payment details — these are corrected promptly regardless of the 7-day window, since they're our error, not a change of mind.`,
@@ -13865,6 +13869,173 @@ function AboutPage({ onBack }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function RefundAdminPage({ onBack }) {
+  const [email, setEmail] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [results, setResults] = useState(null); // null = not searched yet, [] = searched, no results
+  const [searchError, setSearchError] = useState("");
+  const [refundingId, setRefundingId] = useState(null);
+  const [confirmingId, setConfirmingId] = useState(null);
+  const [refundError, setRefundError] = useState("");
+  const [refundedIds, setRefundedIds] = useState(new Set());
+
+  async function handleSearch() {
+    if (!email.trim()) return;
+    setSearching(true);
+    setSearchError("");
+    setResults(null);
+    const { data, error } = await supabase.rpc("admin_lookup_payments_by_email", { p_email: email.trim() });
+    setSearching(false);
+    if (error) {
+      setSearchError("Search failed — please try again.");
+      return;
+    }
+    setResults(data || []);
+  }
+
+  async function handleRefund(row) {
+    if (!row.payment_id || row.payment_id === "unknown") {
+      setRefundError("No valid payment ID on this record — can't issue a refund for it.");
+      setConfirmingId(null);
+      return;
+    }
+    setRefundingId(row.payment_row_id);
+    setRefundError("");
+    const { data, error } = await supabase.functions.invoke("admin-refund-payment", {
+      body: { payment_id: row.payment_id, reason: `Refund for ${row.display_name} — ${row.plan}` },
+    });
+    setRefundingId(null);
+    setConfirmingId(null);
+    if (error || !data?.success) {
+      setRefundError(data?.error || "Refund failed — please try again, or use Razorpay's dashboard directly.");
+      return;
+    }
+    setRefundedIds((prev) => new Set([...prev, row.payment_row_id]));
+  }
+
+  return (
+    <div className="max-w-2xl space-y-5">
+      <button onClick={onBack} className="text-sm text-[var(--accent-text)] hover:brightness-110 flex items-center gap-1">
+        <ChevronLeft size={15} /> Back to Settings
+      </button>
+
+      <div className="flex items-center gap-3">
+        <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center shrink-0">
+          <IndianRupee size={19} className="text-white" />
+        </div>
+        <div>
+          <h1 className="text-xl font-semibold text-[var(--text-primary)]">Issue a refund</h1>
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">Look up a customer by email — every individual charge shows separately, clearly labeled first payment vs. renewal.</p>
+        </div>
+      </div>
+
+      <GlowCard>
+        <div className="flex gap-2">
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+            placeholder="customer@email.com"
+            className="flex-1 bg-[var(--input-bg)] border border-[var(--border)] focus:border-[var(--accent)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-faint)]"
+          />
+          <button
+            onClick={handleSearch}
+            disabled={searching || !email.trim()}
+            className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-50 text-white text-sm font-medium px-5 rounded-xl transition-colors flex items-center gap-2"
+          >
+            {searching && <Loader2 size={14} className="animate-spin" />}
+            Search
+          </button>
+        </div>
+        {searchError && <p className="text-xs text-red-400 mt-2">{searchError}</p>}
+      </GlowCard>
+
+      {refundError && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+          <p className="text-sm text-red-400">{refundError}</p>
+          <button onClick={() => setRefundError("")} className="text-red-400 hover:text-red-300 shrink-0">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {results !== null && (
+        results.length === 0 ? (
+          <GlowCard>
+            <p className="text-sm text-[var(--text-muted)] text-center py-4">No payments found for that email.</p>
+          </GlowCard>
+        ) : (
+          <div className="space-y-3">
+            {results.map((row) => {
+              const isRefunded = refundedIds.has(row.payment_row_id);
+              // Your refund policy only covers first payments within 7
+              // days — surfacing this clearly here means you don't have
+              // to manually reason through the payment history to check.
+              const isWithinWindow = row.is_first_payment && (Date.now() - new Date(row.paid_at).getTime()) < 7 * 24 * 60 * 60 * 1000;
+              return (
+                <GlowCard key={row.payment_row_id}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-[var(--text-primary)]">
+                        {row.display_name} — {row.plan === "premium" ? "Pro" : "Basic"} ({row.billing_interval})
+                      </p>
+                      <p className="text-xs text-[var(--text-faint)] mt-1">
+                        Paid {new Date(row.paid_at).toLocaleDateString()} · Payment ID: {row.payment_id || "—"}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <span className={"text-xs font-medium px-2 py-1 rounded-full " + (row.is_first_payment ? "bg-[rgb(var(--accent-rgb)/0.15)] text-[var(--accent-text)]" : "bg-[var(--surface-2)] text-[var(--text-muted)]")}>
+                        {row.is_first_payment ? "First payment" : "Renewal"}
+                      </span>
+                      {isRefunded && <span className="text-xs font-medium px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-400">Refunded</span>}
+                    </div>
+                  </div>
+
+                  {!row.is_first_payment && (
+                    <p className="text-xs text-amber-400 mt-2">⚠️ This is a renewal charge — per your refund policy, only first payments are eligible within the 7-day window.</p>
+                  )}
+                  {row.is_first_payment && !isWithinWindow && !isRefunded && (
+                    <p className="text-xs text-amber-400 mt-2">⚠️ More than 7 days have passed since this first payment — outside your standard refund window.</p>
+                  )}
+
+                  {!isRefunded && (
+                    <div className="mt-3 pt-3 border-t border-[var(--border-subtle)]">
+                      {confirmingId === row.payment_row_id ? (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setConfirmingId(null)}
+                            className="flex-1 bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-secondary-strong)] text-xs font-medium py-2 rounded-lg transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => handleRefund(row)}
+                            disabled={refundingId === row.payment_row_id}
+                            className="flex-1 bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white text-xs font-medium py-2 rounded-lg transition-colors"
+                          >
+                            {refundingId === row.payment_row_id ? "Processing..." : "Confirm refund"}
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmingId(row.payment_row_id)}
+                          className="w-full text-xs font-medium py-2 rounded-lg border border-red-900/40 text-red-400 hover:bg-red-500/5 transition-colors"
+                        >
+                          Refund this payment{!isWithinWindow ? " anyway (outside normal policy)" : ""}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </GlowCard>
+              );
+            })}
+          </div>
+        )
+      )}
     </div>
   );
 }
@@ -14719,6 +14890,7 @@ function Settings({ user, onLogout, theme, onSelectTheme, soundEnabled, onToggle
   const [showAccount, setShowAccount] = useState(initialView === "account");
   const [showFeedback, setShowFeedback] = useState(initialView === "feedback");
   const [showFeedbackAdmin, setShowFeedbackAdmin] = useState(initialView === "feedbackAdmin");
+  const [showRefundAdmin, setShowRefundAdmin] = useState(initialView === "refundAdmin");
   const [showAbout, setShowAbout] = useState(initialView === "about");
   const [showLegal, setShowLegal] = useState(initialView === "legal");
   const isAdmin = user?.email === "vashvinraj@gmail.com";
@@ -14762,6 +14934,9 @@ function Settings({ user, onLogout, theme, onSelectTheme, soundEnabled, onToggle
   }
   if (showFeedbackAdmin) {
     return <FeedbackAdminPage onBack={() => setShowFeedbackAdmin(false)} />;
+  }
+  if (showRefundAdmin) {
+    return <RefundAdminPage onBack={() => setShowRefundAdmin(false)} />;
   }
 
   const activeThemeInfo = THEMES.find((t) => t.key === theme) || THEMES[0];
@@ -14861,6 +15036,21 @@ function Settings({ user, onLogout, theme, onSelectTheme, soundEnabled, onToggle
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-[var(--text-primary)]">View all feedback (Admin)</p>
               <p className="text-xs text-[var(--text-muted)] mt-0.5">Only visible to you — read and delete submissions</p>
+            </div>
+            <ChevronRight size={16} className="text-[var(--text-faint)] group-hover:text-[var(--accent-text)] group-hover:translate-x-0.5 transition-all shrink-0" />
+          </button>
+        </GlowCard>
+      )}
+
+      {isAdmin && (
+        <GlowCard>
+          <button onClick={() => setShowRefundAdmin(true)} className="w-full flex items-center gap-3 text-left group">
+            <div className="h-11 w-11 rounded-xl shrink-0 bg-amber-500/20 flex items-center justify-center">
+              <IndianRupee size={18} className="text-amber-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-[var(--text-primary)]">Issue a refund (Admin)</p>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">Only visible to you — look up a customer and refund a payment</p>
             </div>
             <ChevronRight size={16} className="text-[var(--text-faint)] group-hover:text-[var(--accent-text)] group-hover:translate-x-0.5 transition-all shrink-0" />
           </button>
