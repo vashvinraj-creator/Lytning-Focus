@@ -12102,7 +12102,7 @@ function Pricing({ goToLegal }) {
       <div className="relative">
         <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
           <span className="bg-gradient-to-r from-amber-400 to-amber-500 text-black text-xs font-bold px-4 py-1 rounded-full shadow-lg shadow-amber-500/30 flex items-center gap-1">
-            <Sparkles size={12} /> BEST VALUE
+            <Sparkles size={12} /> ULTIMATE CHOICE
           </span>
         </div>
         <GlowCard
@@ -12119,7 +12119,7 @@ function Pricing({ goToLegal }) {
               <p className="text-sm text-[var(--text-secondary)]">The ultimate choice — full access, forever. Pay once, never think about billing again.</p>
             </div>
             <div className="text-center shrink-0">
-              <p className="text-3xl font-bold text-[var(--text-primary)]">₹15,000</p>
+              <p className="text-3xl font-bold text-[var(--text-primary)]">Just ₹14,999</p>
               <p className="text-xs text-[var(--text-faint)]">one-time payment</p>
             </div>
             <button
