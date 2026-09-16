@@ -1796,6 +1796,40 @@ function Dashboard({ user, goTo, refreshKey, goToAbout }) {
 const DEFAULT_POMODORO = { focus: 25, short: 5, long: 15 };
 
 /* Small reusable success toast — fades and slides in, then fades out. */
+function ErrorToast({ message }) {
+  const [visible, setVisible] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+
+  useEffect(() => {
+    if (message) {
+      setLeaving(false);
+      setVisible(false);
+      const showTimer = requestAnimationFrame(() => setVisible(true));
+      const leaveTimer = setTimeout(() => setLeaving(true), 4200); // a touch longer than the success toast, since errors need a beat more time to actually read
+      return () => {
+        cancelAnimationFrame(showTimer);
+        clearTimeout(leaveTimer);
+      };
+    }
+  }, [message]);
+
+  if (!message) return null;
+
+  return (
+    <div
+      className={
+        "fixed z-[200] bottom-24 md:bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 text-sm text-red-400 bg-[var(--surface-solid)] border border-red-500/30 rounded-xl px-4 py-2.5 shadow-xl shadow-black/30 transition-all duration-300 max-w-[90vw] " +
+        (visible && !leaving ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2")
+      }
+    >
+      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-500/20">
+        <X size={11} className="text-red-400" />
+      </span>
+      <span>{message}</span>
+    </div>
+  );
+}
+
 function SavedToast({ message }) {
   const [visible, setVisible] = useState(false);
   const [leaving, setLeaving] = useState(false);
@@ -11655,6 +11689,7 @@ function Pricing({ goToLegal }) {
   const [proBilling, setProBilling] = useState("monthly"); // "monthly" | "yearly" — toggle inside the single Pro card
   const [checkoutLoadingPlan, setCheckoutLoadingPlan] = useState(null); // which plan key is currently mid-checkout, or null
   const [checkoutError, setCheckoutError] = useState("");
+  const [checkoutErrorKey, setCheckoutErrorKey] = useState(0);
   const [subStatus, setSubStatus] = useState(null); // { plan, billing_interval, status, current_period_end, cancelled_at, will_renew } | null
   const [subActionLoading, setSubActionLoading] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
@@ -11702,6 +11737,7 @@ function Pricing({ goToLegal }) {
       setCheckoutLoadingPlan(null);
       if (changeError || !changeData?.success) {
         setCheckoutError(changeData?.error || "Couldn't change your plan — please try again.");
+        setCheckoutErrorKey((k) => k + 1);
         return;
       }
       if (changeData.is_upgrade) {
@@ -11724,12 +11760,14 @@ function Pricing({ goToLegal }) {
 
     if (!scriptLoaded) {
       setCheckoutError("Couldn't load the payment window — please check your connection and try again.");
+      setCheckoutErrorKey((k) => k + 1);
       setCheckoutLoadingPlan(null);
       return;
     }
 
     if (subError || !subData) {
       setCheckoutError(subData?.error || "Couldn't start checkout — please try again.");
+      setCheckoutErrorKey((k) => k + 1);
       setCheckoutLoadingPlan(null);
       return;
     }
@@ -11761,6 +11799,7 @@ function Pricing({ goToLegal }) {
 
     rzp.on("payment.failed", function (response) {
       setCheckoutError(`Payment failed: ${response.error.description || "please try again."}`);
+      setCheckoutErrorKey((k) => k + 1);
       setCheckoutLoadingPlan(null);
     });
 
@@ -11862,14 +11901,7 @@ function Pricing({ goToLegal }) {
 
   return (
     <div className="max-w-6xl mx-auto space-y-10">
-      {checkoutError && (
-        <div className="max-w-lg mx-auto bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
-          <p className="text-sm text-red-400">{checkoutError}</p>
-          <button onClick={() => setCheckoutError("")} className="text-red-400 hover:text-red-300 shrink-0">
-            <X size={14} />
-          </button>
-        </div>
-      )}
+      <ErrorToast key={checkoutErrorKey} message={checkoutError} />
       <div className="text-center">
         <h1 className="text-3xl font-bold text-[var(--text-primary)]">Simple pricing</h1>
         <p className="text-sm text-[var(--text-secondary)] mt-1">Everything you need to study is free. Upgrade when you need more.</p>
