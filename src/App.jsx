@@ -11690,6 +11690,61 @@ function Pricing({ goToLegal }) {
   const [checkoutLoadingPlan, setCheckoutLoadingPlan] = useState(null); // which plan key is currently mid-checkout, or null
   const [checkoutError, setCheckoutError] = useState("");
   const [checkoutErrorKey, setCheckoutErrorKey] = useState(0);
+  const [lifetimeLoading, setLifetimeLoading] = useState(false);
+
+  async function handleLifetimePurchase() {
+    if (subStatus?.is_lifetime) {
+      alert("You already have Lytning Focus Premium for life — nothing more to do!");
+      return;
+    }
+    setLifetimeLoading(true);
+    setCheckoutError("");
+
+    const [scriptLoaded, { data: orderData, error: orderError }] = await Promise.all([
+      loadRazorpayScript(),
+      supabase.functions.invoke("create-lifetime-order", { body: {} }),
+    ]);
+
+    if (!scriptLoaded || orderError || !orderData) {
+      setCheckoutError(orderData?.error || "Couldn't start checkout — please try again.");
+      setCheckoutErrorKey((k) => k + 1);
+      setLifetimeLoading(false);
+      return;
+    }
+
+    const rzp = new window.Razorpay({
+      key: orderData.key_id,
+      amount: orderData.amount,
+      currency: orderData.currency,
+      order_id: orderData.order_id,
+      name: "LytningFocus",
+      description: "Premium — Lifetime (one-time payment, never expires)",
+      theme: { color: "#8b5cf6" },
+      handler: function () {
+        // Same principle as every other checkout here — the frontend
+        // never grants access itself. This just tells the person to
+        // expect it, and refreshes once the webhook actually confirms
+        // the payment server-side.
+        setLifetimeLoading(false);
+        alert("You got premium for life! 🎉 Refreshing now.");
+        setTimeout(() => window.location.reload(), 1500);
+      },
+      modal: {
+        ondismiss: function () {
+          setLifetimeLoading(false);
+        },
+      },
+    });
+
+    rzp.on("payment.failed", function (response) {
+      setCheckoutError(`Payment failed: ${response.error.description || "please try again."}`);
+      setCheckoutErrorKey((k) => k + 1);
+      setLifetimeLoading(false);
+    });
+
+    rzp.open();
+  }
+
   const [subStatus, setSubStatus] = useState(null); // { plan, billing_interval, status, current_period_end, cancelled_at, will_renew } | null
   const [subActionLoading, setSubActionLoading] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
@@ -11994,17 +12049,23 @@ function Pricing({ goToLegal }) {
             </ul>
             {plan.cta && plan.key !== "free" && (
               <button
-                onClick={() => !isCurrent && handleUpgradeClick(plan.key === "pro" ? "premium" : plan.key, plan.key === "pro" ? proBilling : "monthly")}
-                disabled={isCurrent || checkoutLoadingPlan === plan.key}
+                onClick={() => {
+                  if (subStatus?.is_lifetime) {
+                    alert("You have Lytning Focus Premium for life — no need to upgrade anything!");
+                    return;
+                  }
+                  if (!isCurrent) handleUpgradeClick(plan.key === "pro" ? "premium" : plan.key, plan.key === "pro" ? proBilling : "monthly");
+                }}
+                disabled={isCurrent || checkoutLoadingPlan === plan.key || subStatus?.is_lifetime}
                 className={
                   "w-full text-sm font-medium py-2.5 rounded-xl mt-5 transition-colors flex items-center justify-center gap-2 " +
-                  (isCurrent
+                  (isCurrent || subStatus?.is_lifetime
                     ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 cursor-default"
                     : "bg-[var(--accent)] hover:bg-[var(--accent-hover)] active:scale-[0.98] text-white disabled:opacity-60 disabled:cursor-wait")
                 }
               >
                 {checkoutLoadingPlan === plan.key && <Loader2 size={15} className="animate-spin" />}
-                {isCurrent ? "Current Plan" : checkoutLoadingPlan === plan.key ? "Opening checkout..." : plan.cta}
+                {subStatus?.is_lifetime ? "Lifetime Active" : isCurrent ? "Current Plan" : checkoutLoadingPlan === plan.key ? "Opening checkout..." : plan.cta}
               </button>
             )}
             {isCurrent && subStatus && subStatus.plan === (plan.key === "pro" ? "premium" : plan.key) && (
@@ -12036,6 +12097,46 @@ function Pricing({ goToLegal }) {
           </GlowCard>
           );
         })}
+      </div>
+
+      <div className="relative">
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
+          <span className="bg-gradient-to-r from-amber-400 to-amber-500 text-black text-xs font-bold px-4 py-1 rounded-full shadow-lg shadow-amber-500/30 flex items-center gap-1">
+            <Sparkles size={12} /> BEST VALUE
+          </span>
+        </div>
+        <GlowCard
+          glow
+          borderColor="rgb(var(--accent-rgb) / 0.7)"
+          className="!p-6 sm:!p-8 bg-gradient-to-r from-[rgb(var(--accent-rgb)/0.18)] via-[rgb(var(--accent-rgb)/0.08)] to-transparent shadow-[0_0_50px_-10px_rgb(var(--accent-rgb)/0.5)]"
+        >
+          <div className="flex flex-col sm:flex-row items-center gap-6">
+            <div className="flex-1 text-center sm:text-left">
+              <div className="flex items-center justify-center sm:justify-start gap-2 mb-1">
+                <Crown size={20} className="text-amber-400" />
+                <p className="text-xl font-bold text-[var(--text-primary)]">Lifetime Premium</p>
+              </div>
+              <p className="text-sm text-[var(--text-secondary)]">The ultimate choice — full access, forever. Pay once, never think about billing again.</p>
+            </div>
+            <div className="text-center shrink-0">
+              <p className="text-3xl font-bold text-[var(--text-primary)]">₹15,000</p>
+              <p className="text-xs text-[var(--text-faint)]">one-time payment</p>
+            </div>
+            <button
+              onClick={handleLifetimePurchase}
+              disabled={lifetimeLoading || subStatus?.is_lifetime}
+              className={
+                "shrink-0 text-sm font-semibold px-8 py-3 rounded-xl transition-colors flex items-center justify-center gap-2 " +
+                (subStatus?.is_lifetime
+                  ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 cursor-default"
+                  : "bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover)] hover:brightness-110 text-white disabled:opacity-60 disabled:cursor-wait active:scale-[0.98] shadow-lg shadow-[rgb(var(--accent-rgb)/0.4)]")
+              }
+            >
+              {lifetimeLoading && <Loader2 size={15} className="animate-spin" />}
+              {subStatus?.is_lifetime ? "You have this" : lifetimeLoading ? "Opening checkout..." : "Get Lifetime Access"}
+            </button>
+          </div>
+        </GlowCard>
       </div>
 
       {showCancelConfirm && (
