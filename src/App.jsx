@@ -2318,6 +2318,20 @@ function StopwatchMode({ onSave, onRunningChange }) {
     setJustSaved(false);
   };
 
+  // Used only right after a successful save() — just clears state for a
+  // fresh session, with NO re-save check. Using reset() here instead would
+  // be a real bug: if the person starts a brand new session during the
+  // brief post-save confirmation window, reset()'s own "seconds > 0" check
+  // would see the NEW session's elapsed time and either re-save it
+  // prematurely or wipe it out entirely when this fires.
+  const clearForNewSession = () => {
+    setRunning(false);
+    setAccumulatedSeconds(0);
+    setSegmentStartedAt(null);
+    setSessionStartedAt(null);
+    setJustSaved(false);
+  };
+
   const save = async () => {
     setRunning(false);
     setSaving(true);
@@ -2326,7 +2340,7 @@ function StopwatchMode({ onSave, onRunningChange }) {
     if (ok) {
       playCompletionSound();
       setJustSaved(true);
-      setTimeout(() => reset(), 1100); // brief confirmation, then ready for a new session
+      setTimeout(() => clearForNewSession(), 400); // brief confirmation, then ready for a new session
     }
   };
 
@@ -2522,8 +2536,8 @@ function FocusTimerMode({ onSave, onRunningChange }) {
         setTimeout(() => {
           backToSetup();
           requestAnimationFrame(() => setViewFading(false));
-        }, 250);
-      }, 1300);
+        }, 150);
+      }, 400);
     }
   };
 
@@ -2832,8 +2846,8 @@ function PomodoroMode({ onSave, onRunningChange }) {
           setDraftDurations(durations);
           setConfigured(false);
           requestAnimationFrame(() => setViewFading(false));
-        }, 250);
-      }, 1300);
+        }, 150);
+      }, 400);
     }
   };
 
@@ -11641,6 +11655,34 @@ function Pricing({ goToLegal }) {
   const [proBilling, setProBilling] = useState("monthly"); // "monthly" | "yearly" — toggle inside the single Pro card
   const [checkoutLoadingPlan, setCheckoutLoadingPlan] = useState(null); // which plan key is currently mid-checkout, or null
   const [checkoutError, setCheckoutError] = useState("");
+  const [subStatus, setSubStatus] = useState(null); // { plan, billing_interval, status, current_period_end, cancelled_at, will_renew } | null
+  const [subActionLoading, setSubActionLoading] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+
+  useEffect(() => {
+    supabase.rpc("get_my_subscription_status").then(({ data }) => setSubStatus(data));
+  }, []);
+
+  async function handleCancelSubscription() {
+    setSubActionLoading(true);
+    const { error } = await supabase.rpc("cancel_my_subscription");
+    setSubActionLoading(false);
+    setShowCancelConfirm(false);
+    if (!error) {
+      const { data } = await supabase.rpc("get_my_subscription_status");
+      setSubStatus(data);
+    }
+  }
+
+  async function handleReactivateSubscription() {
+    setSubActionLoading(true);
+    const { error } = await supabase.rpc("reactivate_my_subscription");
+    setSubActionLoading(false);
+    if (!error) {
+      const { data } = await supabase.rpc("get_my_subscription_status");
+      setSubStatus(data);
+    }
+  }
 
   async function loadRazorpayScript() {
     if (document.getElementById("razorpay-checkout-script")) return true;
@@ -11910,10 +11952,65 @@ function Pricing({ goToLegal }) {
                 {isCurrent ? "Current Plan" : checkoutLoadingPlan === plan.key ? "Opening checkout..." : plan.cta}
               </button>
             )}
+            {isCurrent && subStatus && subStatus.plan === (plan.key === "pro" ? "premium" : plan.key) && (
+              <div className="mt-3 pt-3 border-t border-[var(--border-subtle)]">
+                {!subStatus.will_renew && (
+                  <p className="text-xs bg-amber-500/15 text-amber-400 px-2 py-1 rounded-lg mb-2 text-center font-medium">Cancelled — active until period end</p>
+                )}
+                <p className="text-[11px] text-[var(--text-faint)] text-center mb-2">
+                  {subStatus.will_renew
+                    ? `Renew by ${new Date(subStatus.current_period_end).toLocaleDateString(undefined, { month: "short", day: "numeric" })} to keep this plan`
+                    : `Access ends ${new Date(subStatus.current_period_end).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`}
+                </p>
+                {subStatus.will_renew ? (
+                  <button
+                    onClick={() => setShowCancelConfirm(true)}
+                    className="w-full text-xs font-medium py-2 rounded-lg border border-red-900/40 text-red-400 hover:bg-red-500/5 transition-colors"
+                  >
+                    Cancel subscription
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleReactivateSubscription}
+                    disabled={subActionLoading}
+                    className="w-full text-xs font-medium py-2 rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-50 text-white transition-colors"
+                  >
+                    {subActionLoading ? "Reactivating..." : "Reactivate subscription"}
+                  </button>
+                )}
+              </div>
+            )}
           </GlowCard>
           );
         })}
       </div>
+
+      {showCancelConfirm && (
+        <div className="fixed inset-0 md:left-60 lg:left-64 z-[400] flex items-center justify-center p-4" onClick={() => setShowCancelConfirm(false)}>
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+          <div onClick={(e) => e.stopPropagation()} className="relative bg-[var(--surface-solid)] border border-[var(--border)] rounded-3xl p-6 max-w-sm w-full text-center shadow-xl">
+            <p className="text-base font-semibold text-[var(--text-primary)] mb-2">Cancel your subscription?</p>
+            <p className="text-sm text-[var(--text-muted)] mb-6">
+              You'll keep full access until {subStatus && new Date(subStatus.current_period_end).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })} — nothing is lost right away, and you can reactivate anytime before then.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowCancelConfirm(false)}
+                className="flex-1 bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-secondary-strong)] text-sm font-medium py-2.5 rounded-xl transition-colors"
+              >
+                Never mind
+              </button>
+              <button
+                onClick={handleCancelSubscription}
+                disabled={subActionLoading}
+                className="flex-1 bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white text-sm font-medium py-2.5 rounded-xl transition-colors"
+              >
+                {subActionLoading ? "Cancelling..." : "Yes, cancel"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Full feature-by-feature comparison table, same layout pattern as
           a typical competitor pricing page — every plan's exact numbers
@@ -13624,10 +13721,10 @@ If you're not satisfied with a paid plan, you can request a full refund within 7
 - Partial refunds for unused time if you cancel partway through a period — cancelling simply means you won't be prompted to renew; you keep access for the time you already paid for, and we don't pro-rate refunds for the remaining days.
 
 **How to request a refund**
-Send a message through the Feedback page in Settings within your 7-day window, including your account email and the approximate date of payment. We aim to process eligible refunds within 5-7 business days back to your original payment method via Razorpay.
+Email ryanlighton7business@gmail.com within your 7-day window, with your account email and the approximate date of payment. We aim to process eligible refunds within 5-7 business days back to your original payment method via Razorpay.
 
 **Failed or duplicate payments**
-If you were charged more than once for the same purchase due to a technical error, or a payment failed but your card was still charged, contact us immediately through Feedback — these are corrected promptly regardless of the 7-day window, since they're our error, not a change of mind.`,
+If you were charged more than once for the same purchase due to a technical error, or a payment failed but your card was still charged, email ryanlighton7business@gmail.com immediately with your account email and payment details — these are corrected promptly regardless of the 7-day window, since they're our error, not a change of mind.`,
   },
 ];
 
@@ -14084,35 +14181,6 @@ function AccountSettingsPage({ onBack, onLogout }) {
   const [dobSuccess, setDobSuccess] = useState("");
   const [dobError, setDobError] = useState("");
   const [dobChangeStatus, setDobChangeStatus] = useState(null); // { has_dob, can_change, next_change_available_at }
-  const [subStatus, setSubStatus] = useState(null); // { plan, billing_interval, status, current_period_end, cancelled_at, will_renew } | null
-  const [subActionLoading, setSubActionLoading] = useState(false);
-  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
-
-  useEffect(() => {
-    supabase.rpc("get_my_subscription_status").then(({ data }) => setSubStatus(data));
-  }, []);
-
-  async function handleCancelSubscription() {
-    setSubActionLoading(true);
-    const { error } = await supabase.rpc("cancel_my_subscription");
-    setSubActionLoading(false);
-    setShowCancelConfirm(false);
-    if (!error) {
-      const { data } = await supabase.rpc("get_my_subscription_status");
-      setSubStatus(data);
-    }
-  }
-
-  async function handleReactivateSubscription() {
-    setSubActionLoading(true);
-    const { error } = await supabase.rpc("reactivate_my_subscription");
-    setSubActionLoading(false);
-    if (!error) {
-      const { data } = await supabase.rpc("get_my_subscription_status");
-      setSubStatus(data);
-    }
-  }
-
 
   useEffect(() => {
     loadAll();
@@ -14431,65 +14499,6 @@ function AccountSettingsPage({ onBack, onLogout }) {
             </button>
           </GlowCard>
 
-          {subStatus && subStatus.plan !== "free" && (
-            <GlowCard>
-              <p className="text-sm font-medium text-[var(--text-primary)] mb-1">Manage subscription</p>
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-xs bg-[rgb(var(--accent-rgb)/0.15)] text-[var(--accent-text)] px-2 py-0.5 rounded-full font-medium">
-                  {subStatus.plan === "premium" ? "Pro" : "Basic"} {subStatus.billing_interval === "yearly" ? "· Yearly" : "· Monthly"}
-                </span>
-                {!subStatus.will_renew && <span className="text-xs bg-amber-500/15 text-amber-400 px-2 py-0.5 rounded-full font-medium">Cancelled</span>}
-              </div>
-              <p className="text-xs text-[var(--text-muted)] mb-4">
-                {subStatus.will_renew
-                  ? `Your plan is active. Since nothing auto-charges, you'll need to manually renew after ${new Date(subStatus.current_period_end).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })} to keep your paid features.`
-                  : `You've cancelled — you'll keep full access until ${new Date(subStatus.current_period_end).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}, then your account moves to Free automatically.`}
-              </p>
-              {subStatus.will_renew ? (
-                <button
-                  onClick={() => setShowCancelConfirm(true)}
-                  className="w-full text-sm font-medium py-2.5 rounded-xl border border-red-900/40 text-red-400 hover:bg-red-500/5 transition-colors"
-                >
-                  Cancel subscription
-                </button>
-              ) : (
-                <button
-                  onClick={handleReactivateSubscription}
-                  disabled={subActionLoading}
-                  className="w-full bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-50 text-white text-sm font-medium py-2.5 rounded-xl transition-colors"
-                >
-                  {subActionLoading ? "Reactivating..." : "Reactivate subscription"}
-                </button>
-              )}
-            </GlowCard>
-          )}
-
-          {showCancelConfirm && (
-            <div className="fixed inset-0 md:left-60 lg:left-64 z-[400] flex items-center justify-center p-4" onClick={() => setShowCancelConfirm(false)}>
-              <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-              <div onClick={(e) => e.stopPropagation()} className="relative bg-[var(--surface-solid)] border border-[var(--border)] rounded-3xl p-6 max-w-sm w-full text-center shadow-xl">
-                <p className="text-base font-semibold text-[var(--text-primary)] mb-2">Cancel your subscription?</p>
-                <p className="text-sm text-[var(--text-muted)] mb-6">
-                  You'll keep full access until {subStatus && new Date(subStatus.current_period_end).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })} — nothing is lost right away, and you can reactivate anytime before then.
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setShowCancelConfirm(false)}
-                    className="flex-1 bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-secondary-strong)] text-sm font-medium py-2.5 rounded-xl transition-colors"
-                  >
-                    Never mind
-                  </button>
-                  <button
-                    onClick={handleCancelSubscription}
-                    disabled={subActionLoading}
-                    className="flex-1 bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white text-sm font-medium py-2.5 rounded-xl transition-colors"
-                  >
-                    {subActionLoading ? "Cancelling..." : "Yes, cancel"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
 
           <GlowCard>
             <div className="flex items-center justify-between mb-1">
@@ -14836,19 +14845,6 @@ function Settings({ user, onLogout, theme, onSelectTheme, soundEnabled, onToggle
       </GlowCard>
 
       <GlowCard>
-        <button onClick={() => setShowAbout(true)} className="w-full flex items-center gap-3 text-left group">
-          <div className="h-9 w-9 rounded-xl bg-[var(--surface-2)] flex items-center justify-center shrink-0">
-            <HelpCircle size={16} className="text-[var(--text-secondary-strong)]" />
-          </div>
-          <div className="flex-1">
-            <p className="text-sm font-medium text-[var(--text-primary)]">About & How It Works</p>
-            <p className="text-xs text-[var(--text-muted)] mt-0.5">A full guide to every feature — XP, levels, caps, and more</p>
-          </div>
-          <ChevronRight size={16} className="text-[var(--text-faint)] group-hover:text-[var(--accent-text)] group-hover:translate-x-0.5 transition-all shrink-0" />
-        </button>
-      </GlowCard>
-
-      <GlowCard>
         <button onClick={() => setShowLegal(true)} className="w-full flex items-center gap-3 text-left group">
           <div className="h-9 w-9 rounded-xl bg-[var(--surface-2)] flex items-center justify-center shrink-0">
             <FileText size={16} className="text-[var(--text-secondary-strong)]" />
@@ -14856,6 +14852,19 @@ function Settings({ user, onLogout, theme, onSelectTheme, soundEnabled, onToggle
           <div className="flex-1">
             <p className="text-sm font-medium text-[var(--text-primary)]">Terms & Refund Policy</p>
             <p className="text-xs text-[var(--text-muted)] mt-0.5">Billing, cancellation, and refund details</p>
+          </div>
+          <ChevronRight size={16} className="text-[var(--text-faint)] group-hover:text-[var(--accent-text)] group-hover:translate-x-0.5 transition-all shrink-0" />
+        </button>
+      </GlowCard>
+
+      <GlowCard>
+        <button onClick={() => setShowAbout(true)} className="w-full flex items-center gap-3 text-left group">
+          <div className="h-9 w-9 rounded-xl bg-[var(--surface-2)] flex items-center justify-center shrink-0">
+            <HelpCircle size={16} className="text-[var(--text-secondary-strong)]" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-[var(--text-primary)]">About & How It Works</p>
+            <p className="text-xs text-[var(--text-muted)] mt-0.5">A full guide to every feature — XP, levels, caps, and more</p>
           </div>
           <ChevronRight size={16} className="text-[var(--text-faint)] group-hover:text-[var(--accent-text)] group-hover:translate-x-0.5 transition-all shrink-0" />
         </button>
