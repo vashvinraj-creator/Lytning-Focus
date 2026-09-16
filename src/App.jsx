@@ -11695,7 +11695,7 @@ function Pricing({ goToLegal }) {
     // DIFFERENT plan, this is a plan change, not a brand-new subscriber —
     // route through Razorpay's real "update subscription" API instead of
     // creating a second, separate subscription that would double-bill them.
-    if (subStatus && subStatus.status !== "cancelled" && subStatus.status !== "expired" && subStatus.status !== "halted" && subStatus.status !== "completed") {
+    if (subStatus && (subStatus.status === "active" || subStatus.status === "past_due")) {
       const { data: changeData, error: changeError } = await supabase.functions.invoke("change-razorpay-subscription-plan", {
         body: { plan: planKey, billing_interval: billingInterval },
       });
