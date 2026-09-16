@@ -11690,6 +11690,30 @@ function Pricing({ goToLegal }) {
     setCheckoutError("");
     setCheckoutLoadingPlan(planKey);
 
+    // If they already have an active (or past_due) subscription to a
+    // DIFFERENT plan, this is a plan change, not a brand-new subscriber —
+    // route through Razorpay's real "update subscription" API instead of
+    // creating a second, separate subscription that would double-bill them.
+    if (subStatus && subStatus.status !== "cancelled" && subStatus.status !== "expired" && subStatus.status !== "halted" && subStatus.status !== "completed") {
+      const { data: changeData, error: changeError } = await supabase.functions.invoke("change-razorpay-subscription-plan", {
+        body: { plan: planKey, billing_interval: billingInterval },
+      });
+      setCheckoutLoadingPlan(null);
+      if (changeError || !changeData?.success) {
+        setCheckoutError(changeData?.error || "Couldn't change your plan — please try again.");
+        return;
+      }
+      if (changeData.is_upgrade) {
+        alert("Plan upgraded! Refreshing now.");
+        window.location.reload();
+      } else {
+        alert(`Got it — you'll move to this plan at the end of your current billing period (${new Date(subStatus.current_period_end).toLocaleDateString()}). You keep your current plan's access until then.`);
+        const { data } = await supabase.rpc("get_my_subscription_status");
+        setSubStatus(data);
+      }
+      return;
+    }
+
     const scriptLoaded = await loadRazorpayScript();
     if (!scriptLoaded) {
       setCheckoutError("Couldn't load the payment window — please check your connection and try again.");
