@@ -10602,7 +10602,8 @@ function HabitTracker({ refreshKey, goTo, initialYear, initialMonth, readOnly, o
             <div className="md:col-span-3">
               <GlowCard>
                 <p ref={titleRef} className="text-sm font-medium text-[var(--text-primary)] mb-3 text-center">Daily habits</p>
-                <table className="border-collapse text-[10px] w-full table-fixed">
+                <div className="overflow-x-auto -mx-1 px-1">
+                <table className="border-collapse text-[10px] w-full min-w-[640px] md:min-w-0 md:table-fixed">
                   <thead ref={theadRef}>
                     <tr>
                       <th rowSpan={2} className="bg-[rgb(var(--accent-rgb)/0.2)] text-center px-2 py-2 text-[var(--text-primary)] font-bold uppercase tracking-wide text-xs border border-[rgb(var(--accent-rgb)/0.3)]" style={{ width: "18%" }}>
@@ -10687,6 +10688,7 @@ function HabitTracker({ refreshKey, goTo, initialYear, initialMonth, readOnly, o
                     })}
                   </tbody>
                 </table>
+                </div>
               </GlowCard>
             </div>
 
@@ -11418,7 +11420,7 @@ function Growth({ refreshKey, goTo }) {
   };
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-2xl mx-auto pb-8 md:pb-0">
       <div className="text-center mb-2">
         <h1 className="text-xl font-semibold text-[var(--text-primary)]">Growth</h1>
         <p className="text-sm text-[var(--text-secondary)] mt-0.5">Every focused minute makes you stronger.</p>
