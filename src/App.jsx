@@ -10606,7 +10606,7 @@ function HabitTracker({ refreshKey, goTo, initialYear, initialMonth, readOnly, o
                 <table className="border-collapse text-[10px] w-full min-w-[640px] md:min-w-0 md:table-fixed">
                   <thead ref={theadRef}>
                     <tr>
-                      <th rowSpan={2} className="bg-[rgb(var(--accent-rgb)/0.2)] text-center px-2 py-2 text-[var(--text-primary)] font-bold uppercase tracking-wide text-xs border border-[rgb(var(--accent-rgb)/0.3)]" style={{ width: "18%" }}>
+                      <th rowSpan={2} className="sticky left-0 z-10 bg-[rgb(var(--accent-rgb)/0.9)] backdrop-blur-sm text-center px-2 py-2 text-[var(--text-primary)] font-bold uppercase tracking-wide text-xs border border-[rgb(var(--accent-rgb)/0.3)]" style={{ width: "18%" }}>
                         Habit
                       </th>
                         {weeks.map((w, wi) => (
@@ -10650,7 +10650,7 @@ function HabitTracker({ refreshKey, goTo, initialYear, initialMonth, readOnly, o
                       const pct = daysInMonth > 0 ? Math.round((completed / daysInMonth) * 100) : 0;
                       return (
                         <tr key={h.id} style={{ height: 26 }}>
-                          <td className="px-2 py-1.5 text-[var(--text-primary)] text-center truncate border border-[var(--border-subtle)]">
+                          <td className="sticky left-0 z-10 bg-[var(--surface-solid)] px-2 py-1.5 text-[var(--text-primary)] text-center truncate border border-[var(--border-subtle)]">
                             {h.name}
                           </td>
                           {dayNumbers.map((d) => {
@@ -11420,7 +11420,7 @@ function Growth({ refreshKey, goTo }) {
   };
 
   return (
-    <div className="max-w-2xl mx-auto pb-8 md:pb-0">
+    <div className="max-w-2xl mx-auto pb-24 md:pb-0">
       <div className="text-center mb-2">
         <h1 className="text-xl font-semibold text-[var(--text-primary)]">Growth</h1>
         <p className="text-sm text-[var(--text-secondary)] mt-0.5">Every focused minute makes you stronger.</p>
@@ -12851,7 +12851,7 @@ function MonthView({ viewDate, events, onSelectDay, onEventClick }) {
           const isCurrentMonth = d.getMonth() === month;
           const isToday = iso === todayISO;
           const dayEvents = (eventsByDate[iso] || []).sort((a, b) => timeStringToMinutes(a.start_time) - timeStringToMinutes(b.start_time));
-          const visible = dayEvents.slice(0, 3);
+          const visible = dayEvents.slice(0, 2);
           const overflow = dayEvents.length - visible.length;
 
           return (
@@ -12859,7 +12859,7 @@ function MonthView({ viewDate, events, onSelectDay, onEventClick }) {
               key={iso}
               onClick={() => onSelectDay(d)}
               className={
-                "text-left rounded-lg p-1.5 min-h-[84px] transition-all duration-150 border hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20 " +
+                "text-left rounded-lg p-1.5 min-h-[52px] md:min-h-[84px] transition-all duration-150 border hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20 " +
                 (isCurrentMonth ? "bg-[var(--surface-2)]/30 border-[var(--border-subtle)]" : "bg-transparent border-transparent opacity-40") +
                 " hover:border-[rgb(var(--accent-rgb)/0.4)]"
               }
@@ -12897,7 +12897,7 @@ function MonthView({ viewDate, events, onSelectDay, onEventClick }) {
 }
 
 const SCHEDULE_START_HOUR = 0; // 12 AM
-const SCHEDULE_END_HOUR = 12; // 12 PM
+const SCHEDULE_END_HOUR = 24; // midnight the next day — the full 24-hour day, not just the morning
 const HOUR_HEIGHT = 44; // px per hour — change this to adjust the whole timeline's scale
 
 // Hourly vertical timeline for a single day, with events positioned and
@@ -12905,6 +12905,7 @@ const HOUR_HEIGHT = 44; // px per hour — change this to adjust the whole timel
 // current-time indicator when viewing today, and click-to-create.
 function ScheduleView({ viewDate, events, onCreateAt, onEventClick }) {
   const [nowTick, setNowTick] = useState(Date.now());
+  const scrollMarkerRef = useRef(null);
   useEffect(() => {
     const t = setInterval(() => setNowTick(Date.now()), 60000);
     return () => clearInterval(t);
@@ -12925,6 +12926,17 @@ function ScheduleView({ viewDate, events, onCreateAt, onEventClick }) {
 
   const hours = Array.from({ length: SCHEDULE_END_HOUR - SCHEDULE_START_HOUR + 1 }, (_, i) => SCHEDULE_START_HOUR + i);
 
+  // Opens scrolled to something actually useful instead of always starting
+  // at midnight — the current time if viewing today, otherwise a little
+  // before the day's earliest event, or a reasonable 7am default if there
+  // are no events yet.
+  useEffect(() => {
+    const earliestEventMin = dayEvents.length > 0 ? Math.min(...dayEvents.map((ev) => timeStringToMinutes(ev.start_time))) : null;
+    const targetMin = isToday ? nowMinutes : earliestEventMin !== null ? Math.max(0, earliestEventMin - 60) : 7 * 60;
+    scrollMarkerRef.current?.scrollIntoView({ block: "start" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [iso]);
+
   const handleTrackClick = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const y = e.clientY - rect.top;
@@ -12935,8 +12947,13 @@ function ScheduleView({ viewDate, events, onCreateAt, onEventClick }) {
     onCreateAt(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
   };
 
+  const earliestEventMin = dayEvents.length > 0 ? Math.min(...dayEvents.map((ev) => timeStringToMinutes(ev.start_time))) : null;
+  const scrollTargetMin = isToday ? nowMinutes : earliestEventMin !== null ? Math.max(0, earliestEventMin - 60) : 7 * 60;
+  const scrollTargetTop = ((scrollTargetMin - rangeStartMin) / 60) * HOUR_HEIGHT;
+
   return (
     <div className="relative flex" style={{ height: totalHeight }}>
+      <div ref={scrollMarkerRef} className="absolute left-0 right-0 pointer-events-none" style={{ top: Math.max(0, scrollTargetTop) }} />
       {/* Time label column — fixed width, clearly separated from events by a visible divider */}
       <div className="relative w-14 shrink-0 border-r border-[var(--border-subtle)]">
         {hours.map((h, i) => (
@@ -13386,15 +13403,17 @@ function EventsPage({ goTo }) {
             onEventClick={(ev) => setModalEvent(ev)}
           />
         ) : (
-          <ScheduleView
-            viewDate={viewDate}
-            events={filteredEvents}
-            onCreateAt={(time) => {
-              setPrefillTime(time);
-              setModalEvent(null);
-            }}
-            onEventClick={(ev) => setModalEvent(ev)}
-          />
+          <div className="max-h-[70vh] overflow-y-auto">
+            <ScheduleView
+              viewDate={viewDate}
+              events={filteredEvents}
+              onCreateAt={(time) => {
+                setPrefillTime(time);
+                setModalEvent(null);
+              }}
+              onEventClick={(ev) => setModalEvent(ev)}
+            />
+          </div>
         )}
       </GlowCard>
 
