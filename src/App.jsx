@@ -10607,9 +10607,9 @@ function HabitTracker({ refreshKey, goTo, initialYear, initialMonth, readOnly, o
             <div className="md:col-span-3">
               <GlowCard>
                 <p ref={titleRef} className="text-sm font-medium text-[var(--text-primary)] mb-3 text-center">Daily habits</p>
-                <div className="overflow-x-auto -mx-1 px-1">
+                <div className="overflow-x-auto overflow-y-auto max-h-[420px] md:max-h-none md:overflow-y-visible -mx-1 px-1">
                 <table className="border-collapse text-[10px] w-full min-w-[640px] md:min-w-0 md:table-fixed">
-                  <thead ref={theadRef}>
+                  <thead ref={theadRef} className="sticky top-0 z-20 bg-[var(--surface-solid)]">
                     <tr>
                       <th rowSpan={2} className="sticky left-0 z-10 bg-[rgb(var(--accent-rgb)/0.9)] backdrop-blur-sm text-center px-2 py-2 text-[var(--text-primary)] font-bold uppercase tracking-wide text-xs border border-[rgb(var(--accent-rgb)/0.3)]" style={{ width: "18%" }}>
                         Habit
@@ -10708,7 +10708,8 @@ function HabitTracker({ refreshKey, goTo, initialYear, initialMonth, readOnly, o
                     </span>
                   </div>
                 </div>
-                <table className="border-collapse w-full flex-1">
+                <div className="overflow-y-auto max-h-[420px] md:max-h-none md:overflow-y-visible flex-1">
+                <table className="border-collapse w-full">
                   <tbody>
                     {habits.map((h) => {
                       const completed = completedCountFor(h.id);
@@ -10729,6 +10730,7 @@ function HabitTracker({ refreshKey, goTo, initialYear, initialMonth, readOnly, o
                     })}
                   </tbody>
                 </table>
+                </div>
               </GlowCard>
             </div>
           </div>
