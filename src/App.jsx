@@ -1486,7 +1486,8 @@ function Dashboard({ user, goTo, refreshKey, goToAbout }) {
     loadTasks();
     loadStreakData();
     (async () => {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      const authUser = authSession?.user;
       if (!authUser) return;
       const { data } = await supabase.from("profiles").select("premium_tier, has_seen_about_prompt").eq("user_id", authUser.id).maybeSingle();
       setMyTier(data?.premium_tier || "free");
@@ -2026,7 +2027,8 @@ function Focus({ onSessionSaved, isActive }) {
     // if today's focus cap was already partly or fully used up, only the
     // remaining headroom counts. Query today's real total (this session is
     // already saved, so it's included) to work out the marginal XP gained.
-    const { data: { user: xpUser } } = await supabase.auth.getUser();
+    const { data: { session: xpSession } } = await supabase.auth.getSession();
+    const xpUser = xpSession?.user;
     let xpGained = mins * GROWTH_XP_PER_MINUTE;
     if (xpUser) {
       const [{ data: tierData }, { data: todaySessions }] = await Promise.all([
@@ -4434,7 +4436,8 @@ function Statistics({ refreshKey }) {
     loadSessions();
     loadTasks();
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      const user = authSession?.user;
       if (!user) return;
       const { data } = await supabase.from("profiles").select("premium_tier").eq("user_id", user.id).maybeSingle();
       setMyTier(data?.premium_tier || "free");
@@ -9147,7 +9150,8 @@ function Insights({ refreshKey, goTo }) {
   useEffect(() => {
     loadAll();
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      const user = authSession?.user;
       if (!user) {
         setMyTier("free");
         return;
@@ -10095,7 +10099,8 @@ function HabitTracker({ refreshKey, goTo, initialYear, initialMonth, readOnly, o
     // Fetch habits, this month's logs, and premium status at the same time
     // instead of one after the other — this was the actual cause of the
     // slow/laggy load before.
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session: authSession } } = await supabase.auth.getSession();
+    const user = authSession?.user;
     const [habitsRes, logsRes, profileRes] = await Promise.all([
       supabase.from("habits").select("*").order("created_at", { ascending: true }),
       supabase.from("habit_logs").select("habit_id, log_date").gte("log_date", start).lte("log_date", end),
@@ -11342,7 +11347,8 @@ function Growth({ refreshKey, goTo }) {
   async function loadSessions() {
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      const user = authSession?.user;
       const [sessionsRes, achievementsRes, profileRes, taskStatsRes] = await Promise.all([
         supabase.from("study_sessions").select("*").order("completed_at", { ascending: false }),
         user ? supabase.from("user_achievements").select("xp_awarded").eq("user_id", user.id) : Promise.resolve({ data: [] }),
@@ -11865,7 +11871,8 @@ function Pricing({ goToLegal }) {
 
   useEffect(() => {
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      const user = authSession?.user;
       if (!user) {
         setMyTier("free");
         return;
@@ -13501,7 +13508,8 @@ function AppearancePage({ theme, onSelectTheme, error, onBack, goTo }) {
 
   useEffect(() => {
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      const user = authSession?.user;
       if (!user) return;
       const { data } = await supabase.from("profiles").select("premium_tier").eq("user_id", user.id).maybeSingle();
       setMyTier(data?.premium_tier || "free");
@@ -13627,7 +13635,8 @@ function SoundPage({ selectedSound, onSelectSound, error, onBack, goTo }) {
 
   useEffect(() => {
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      const user = authSession?.user;
       if (!user) return;
       const { data } = await supabase.from("profiles").select("premium_tier").eq("user_id", user.id).maybeSingle();
       setMyTier(data?.premium_tier || "free");
@@ -15730,7 +15739,8 @@ export default function StudyFlowAI() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      const authUser = authSession?.user;
       if (!authUser) return;
       const { data: profileRow } = await supabase.from("profiles").select("premium_tier").eq("user_id", authUser.id).maybeSingle();
       setMyGlobalTier(profileRow?.premium_tier || "free");
