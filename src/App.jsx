@@ -3546,7 +3546,7 @@ function TaskLists({ goTo }) {
             <p className="text-base font-semibold text-[var(--text-primary)] mb-2">To-Do List is a Basic feature</p>
             <p className="text-sm text-[var(--text-muted)] mb-6">Build recurring checklists for your daily and weekly routines — included with Basic and Pro.</p>
             <button
-              onClick={() => goTo && goTo("pricing")}
+              onClick={() => requireAuth(() => goTo && goTo("pricing"))}
               className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-medium px-6 py-3 rounded-xl transition-colors glow-accent-40 w-full"
             >
               Upgrade to Unlock
@@ -9129,6 +9129,7 @@ function Profile({ refreshKey, onProfileReady, goToAccountSettings }) {
 }
 
 function Insights({ refreshKey, goTo }) {
+  const { requireAuth } = useRequireAuth();
   const [sessions, setSessions] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [lifetimeTasksCompleted, setLifetimeTasksCompleted] = useState(0);
@@ -9651,7 +9652,7 @@ function Insights({ refreshKey, goTo }) {
               Deep study patterns, peak-hour analysis, milestone predictions, and PDF export of your Habit Tracker are all included with Pro.
             </p>
             <button
-              onClick={() => goTo && goTo("pricing")}
+              onClick={() => requireAuth(() => goTo && goTo("pricing"))}
               className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-medium px-6 py-3 rounded-xl transition-colors glow-accent-40 w-full"
             >
               Upgrade to Unlock
@@ -10402,7 +10403,7 @@ function HabitTracker({ refreshKey, goTo, initialYear, initialMonth, readOnly, o
             <p className="text-base font-semibold text-[var(--text-primary)] mb-2">Habit Tracker is a Pro feature</p>
             <p className="text-sm text-[var(--text-muted)] mb-6">Daily habit tracking, streaks, and monthly insights are included with Pro. Need recurring checklists instead? Try the To-Do List under Tasks — that's included with Basic.</p>
             <button
-              onClick={() => goTo && goTo("pricing")}
+              onClick={() => requireAuth(() => goTo && goTo("pricing"))}
               className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-medium px-6 py-3 rounded-xl transition-colors glow-accent-40 w-full"
             >
               Upgrade to Unlock
@@ -11692,6 +11693,7 @@ const PRICING_PREMIUM_FEATURES = [
 const PRICING_YEARLY_FEATURES = [...PRICING_PREMIUM_FEATURES, { text: "Streak Restore — 6 per year", exclusive: true }];
 
 function Pricing({ goToLegal }) {
+  const { requireAuth } = useRequireAuth();
   const [myTier, setMyTier] = useState(null); // null while loading — avoids Free wrongly flashing as "current" before the real tier loads
   const [myBillingInterval, setMyBillingInterval] = useState(null); // "monthly" | "yearly" | null — only meaningful when myTier === "premium"
   const [proBilling, setProBilling] = useState("monthly"); // "monthly" | "yearly" — toggle inside the single Pro card
@@ -11701,6 +11703,11 @@ function Pricing({ goToLegal }) {
   const [lifetimeLoading, setLifetimeLoading] = useState(false);
 
   async function handleLifetimePurchase() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      requireAuth(() => {});
+      return;
+    }
     if (subStatus?.is_lifetime) {
       alert("You already have Lytning Focus Premium for life — nothing more to do!");
       return;
@@ -11786,6 +11793,11 @@ function Pricing({ goToLegal }) {
   }
 
   async function handleUpgradeClick(planKey, billingInterval) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      requireAuth(() => {}); // opens the sign-in prompt; nothing to do after, they'll just click Upgrade again once logged in
+      return;
+    }
     setCheckoutError("");
     setCheckoutLoadingPlan(planKey);
 
@@ -13219,7 +13231,7 @@ function EventsPage({ goTo }) {
             <p className="text-base font-semibold text-[var(--text-primary)] mb-2">Events is a Basic feature</p>
             <p className="text-sm text-[var(--text-muted)] mb-6">Keep track of deadlines, classes, and exams with a full calendar view — included with Basic and Pro.</p>
             <button
-              onClick={() => goTo && goTo("pricing")}
+              onClick={() => requireAuth(() => goTo && goTo("pricing"))}
               className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-medium px-6 py-3 rounded-xl transition-colors glow-accent-40 w-full"
             >
               Upgrade to Unlock
@@ -13498,6 +13510,7 @@ function ThemeCard({ theme, active, locked, previewing, onClick }) {
 // Dedicated Appearance/Themes page — reached from Settings, with its own
 // back button rather than living inline on the main Settings page.
 function AppearancePage({ theme, onSelectTheme, error, onBack, goTo }) {
+  const { requireAuth } = useRequireAuth();
   const [themeFilter, setThemeFilter] = useState("all"); // "all" | "free" | "premium"
   const [myTier, setMyTier] = useState("free");
   const [previewingKey, setPreviewingKey] = useState(null);
@@ -13585,7 +13598,7 @@ function AppearancePage({ theme, onSelectTheme, error, onBack, goTo }) {
             Previewing <span className="font-semibold">{THEMES.find((t) => t.key === previewingKey)?.name}</span> — reverts in {previewSecondsLeft}s
           </p>
           <button
-            onClick={() => goTo && goTo("pricing")}
+            onClick={() => requireAuth(() => goTo && goTo("pricing"))}
             className="text-xs font-semibold bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
           >
             Upgrade to Unlock
@@ -13682,6 +13695,7 @@ function SoundPage({ selectedSound, onSelectSound, error, onBack, goTo }) {
 }
 
 function SoundRow({ sound, active, onSelect, locked, goTo }) {
+  const { requireAuth } = useRequireAuth();
   const [playing, setPlaying] = useState(false);
   const testSound = (e) => {
     e.stopPropagation();
@@ -13714,7 +13728,7 @@ function SoundRow({ sound, active, onSelect, locked, goTo }) {
       </button>
       {locked ? (
         <button
-          onClick={() => goTo && goTo("pricing")}
+          onClick={() => requireAuth(() => goTo && goTo("pricing"))}
           className="text-xs font-semibold text-amber-400 border border-amber-500/40 hover:bg-amber-500/10 px-3 py-1.5 rounded-lg transition-colors shrink-0 whitespace-nowrap"
         >
           Upgrade to Pro
