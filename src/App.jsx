@@ -10467,9 +10467,9 @@ function HabitTracker({ refreshKey, goTo, initialYear, initialMonth, readOnly, o
         </GlowCard>
       )}
 
-      <div className="relative flex items-center justify-between">
-        <p className="text-xs text-[var(--text-muted)] shrink-0"></p>
-        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-3">
+      <div className="flex flex-col md:relative md:flex-row md:items-center md:justify-between gap-3">
+        <p className="hidden md:block text-xs text-[var(--text-muted)] shrink-0"></p>
+        <div className="flex items-center justify-center gap-3 md:absolute md:left-1/2 md:-translate-x-1/2">
           {!readOnly && (
             <button onClick={goPrevMonth} className="h-8 w-8 rounded-lg bg-[var(--surface-2)] border border-[var(--card-border)] text-[var(--text-secondary-strong)] hover:bg-[var(--surface-3)] flex items-center justify-center transition-all duration-150 active:scale-90">
               <ChevronLeft size={15} />
@@ -10486,7 +10486,7 @@ function HabitTracker({ refreshKey, goTo, initialYear, initialMonth, readOnly, o
           )}
           {!readOnly && <FadeMessage trigger={boundaryMsgTrigger} text="No records before this month — that's when you started tracking." />}
         </div>
-        <div className="shrink-0">
+        <div className="shrink-0 flex justify-center md:block">
           <LimitBadge label="Habit limit" current={habits.length} max={null} goTo={goTo} />
         </div>
       </div>
@@ -10611,7 +10611,7 @@ function HabitTracker({ refreshKey, goTo, initialYear, initialMonth, readOnly, o
                 <table className="border-collapse text-[10px] w-full min-w-[640px] md:min-w-0 md:table-fixed">
                   <thead ref={theadRef}>
                     <tr>
-                      <th rowSpan={2} className="sticky left-0 z-10 bg-[rgb(var(--accent-rgb)/0.9)] backdrop-blur-sm text-center px-2 py-2 text-[var(--text-primary)] font-bold uppercase tracking-wide text-xs border border-[rgb(var(--accent-rgb)/0.3)]" style={{ width: "18%" }}>
+                      <th rowSpan={2} className="sticky left-0 z-10 bg-[var(--surface-solid)] text-center px-2 py-2 text-[var(--text-primary)] font-bold uppercase tracking-wide text-xs border border-[rgb(var(--accent-rgb)/0.3)] border-b-2 border-b-[rgb(var(--accent-rgb)/0.6)]" style={{ width: "18%" }}>
                         Habit
                       </th>
                         {weeks.map((w, wi) => (
