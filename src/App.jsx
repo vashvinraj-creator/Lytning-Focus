@@ -14017,6 +14017,212 @@ function AboutPage({ onBack }) {
   );
 }
 
+function RevenueDashboardPage({ onBack }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [expenseDesc, setExpenseDesc] = useState("");
+  const [expenseAmount, setExpenseAmount] = useState("");
+  const [addingExpense, setAddingExpense] = useState(false);
+  const [expenseError, setExpenseError] = useState("");
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState(null);
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function load() {
+    setLoading(true);
+    const { data: result, error } = await supabase.rpc("admin_get_revenue_dashboard");
+    setLoading(false);
+    if (!error) setData(result);
+  }
+
+  const rupees = (paise) => `₹${(paise / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+
+  async function handleAddExpense() {
+    setExpenseError("");
+    const amt = parseFloat(expenseAmount);
+    if (!expenseDesc.trim() || !amt || amt <= 0) {
+      setExpenseError("Enter a description and a valid amount.");
+      return;
+    }
+    setAddingExpense(true);
+    const { error } = await supabase.rpc("admin_add_expense", { p_description: expenseDesc.trim(), p_amount_rupees: amt });
+    setAddingExpense(false);
+    if (error) {
+      setExpenseError("Failed to add expense — please try again.");
+      return;
+    }
+    setExpenseDesc("");
+    setExpenseAmount("");
+    load();
+  }
+
+  async function handleDeleteExpense(id) {
+    await supabase.rpc("admin_delete_expense", { p_expense_id: id });
+    setConfirmingDeleteId(null);
+    load();
+  }
+
+  if (loading) {
+    return (
+      <div className="max-w-3xl space-y-5">
+        <button onClick={onBack} className="text-sm text-[var(--accent-text)] hover:brightness-110 flex items-center gap-1">
+          <ChevronLeft size={15} /> Back to Settings
+        </button>
+        <GlowCard>
+          <p className="text-sm text-[var(--text-muted)] text-center py-8">Loading dashboard…</p>
+        </GlowCard>
+      </div>
+    );
+  }
+
+  const netAllTime = (data?.revenue_all_time || 0) - (data?.expenses_all_time || 0);
+
+  return (
+    <div className="max-w-3xl space-y-5">
+      <button onClick={onBack} className="text-sm text-[var(--accent-text)] hover:brightness-110 flex items-center gap-1">
+        <ChevronLeft size={15} /> Back to Settings
+      </button>
+
+      <div className="flex items-center gap-3">
+        <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center shrink-0">
+          <TrendingUp size={19} className="text-white" />
+        </div>
+        <div>
+          <h1 className="text-xl font-semibold text-[var(--text-primary)]">Revenue Dashboard</h1>
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">Only visible to you — live revenue, expenses, and net profit.</p>
+        </div>
+      </div>
+
+      {/* Top stats: revenue today/month/year, and live user count */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <GlowCard>
+          <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)] mb-1">Today</p>
+          <p className="text-lg font-bold text-emerald-400">{rupees(data?.revenue_today || 0)}</p>
+        </GlowCard>
+        <GlowCard>
+          <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)] mb-1">This Month</p>
+          <p className="text-lg font-bold text-emerald-400">{rupees(data?.revenue_month || 0)}</p>
+        </GlowCard>
+        <GlowCard>
+          <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)] mb-1">This Year</p>
+          <p className="text-lg font-bold text-emerald-400">{rupees(data?.revenue_year || 0)}</p>
+        </GlowCard>
+        <GlowCard>
+          <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)] mb-1">Registered Users</p>
+          <p className="text-lg font-bold text-[var(--accent-text)]">{(data?.registered_users_count || 0).toLocaleString()}</p>
+        </GlowCard>
+      </div>
+
+      {/* Net profit summary */}
+      <GlowCard glow className="bg-gradient-to-r from-[rgb(var(--accent-rgb)/0.12)] to-transparent">
+        <p className="text-sm font-medium text-[var(--text-primary)] mb-3">All-Time Summary</p>
+        <div className="grid grid-cols-3 gap-3 text-center">
+          <div>
+            <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)] mb-1">Gross Revenue</p>
+            <p className="text-base font-bold text-emerald-400">{rupees(data?.revenue_all_time || 0)}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)] mb-1">Expenses</p>
+            <p className="text-base font-bold text-red-400">-{rupees(data?.expenses_all_time || 0)}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)] mb-1">Net Profit</p>
+            <p className={"text-base font-bold " + (netAllTime >= 0 ? "text-[var(--accent-text)]" : "text-red-400")}>{rupees(netAllTime)}</p>
+          </div>
+        </div>
+      </GlowCard>
+
+      {/* Expense tracker */}
+      <GlowCard>
+        <p className="text-sm font-medium text-[var(--text-primary)] mb-3">Log an expense</p>
+        <div className="flex flex-col sm:flex-row gap-2 mb-2">
+          <input
+            value={expenseDesc}
+            onChange={(e) => setExpenseDesc(e.target.value)}
+            placeholder="e.g. Domain renewal"
+            className="flex-1 bg-[var(--input-bg)] border border-[var(--border)] focus:border-[var(--accent)] rounded-xl px-3 py-2 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-faint)]"
+          />
+          <input
+            value={expenseAmount}
+            onChange={(e) => setExpenseAmount(e.target.value)}
+            type="number"
+            placeholder="Amount (₹)"
+            className="sm:w-32 bg-[var(--input-bg)] border border-[var(--border)] focus:border-[var(--accent)] rounded-xl px-3 py-2 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-faint)]"
+          />
+          <button
+            onClick={handleAddExpense}
+            disabled={addingExpense}
+            className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-50 text-white text-sm font-medium px-5 py-2 rounded-xl transition-colors shrink-0"
+          >
+            {addingExpense ? "Adding..." : "Add"}
+          </button>
+        </div>
+        {expenseError && <p className="text-xs text-red-400 mb-2">{expenseError}</p>}
+
+        {data?.expenses?.length > 0 && (
+          <div className="space-y-1.5 mt-3 pt-3 border-t border-[var(--border-subtle)]">
+            {data.expenses.map((e) => (
+              <div key={e.id} className="flex items-center justify-between text-sm gap-2">
+                <div className="min-w-0">
+                  <p className="text-[var(--text-secondary-strong)] truncate">{e.description}</p>
+                  <p className="text-[10px] text-[var(--text-faint)]">{new Date(e.created_at).toLocaleDateString()}</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-red-400 font-medium">-{rupees(e.amount_paise)}</span>
+                  {confirmingDeleteId === e.id ? (
+                    <div className="flex gap-1">
+                      <button onClick={() => handleDeleteExpense(e.id)} className="text-xs bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded-md">
+                        Confirm
+                      </button>
+                      <button onClick={() => setConfirmingDeleteId(null)} className="text-xs text-[var(--text-muted)] px-2 py-1">
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setConfirmingDeleteId(e.id)} className="text-[var(--text-faint)] hover:text-red-400 p-1">
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </GlowCard>
+
+      {/* Full payment history */}
+      <GlowCard>
+        <p className="text-sm font-medium text-[var(--text-primary)] mb-3">Payment history ({data?.payment_history?.length || 0})</p>
+        {(!data?.payment_history || data.payment_history.length === 0) ? (
+          <p className="text-sm text-[var(--text-muted)] text-center py-4">No payments yet.</p>
+        ) : (
+          <div className="space-y-1.5 max-h-[420px] overflow-y-auto">
+            {data.payment_history.map((p) => (
+              <div key={p.id} className="flex items-center justify-between text-sm gap-2 py-1.5 border-b border-[var(--border-subtle)] last:border-0">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[var(--text-primary)] truncate">{p.display_name}</p>
+                  <p className="text-[10px] text-[var(--text-faint)]">
+                    {new Date(p.paid_at).toLocaleDateString()} · {p.is_first_payment ? "First payment" : "Renewal"}
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-emerald-400 font-medium">{rupees(p.amount_paise)}</p>
+                  <p className="text-[10px] text-[var(--text-faint)]">
+                    {p.plan === "lifetime" ? "Lifetime" : p.plan === "premium" ? "Pro" : "Basic"}
+                    {p.billing_interval && p.billing_interval !== "lifetime" ? ` · ${p.billing_interval}` : ""}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </GlowCard>
+    </div>
+  );
+}
+
 function RefundAdminPage({ onBack }) {
   const [email, setEmail] = useState("");
   const [searching, setSearching] = useState(false);
@@ -15035,6 +15241,7 @@ function Settings({ user, onLogout, theme, onSelectTheme, soundEnabled, onToggle
   const [showFeedback, setShowFeedback] = useState(initialView === "feedback");
   const [showFeedbackAdmin, setShowFeedbackAdmin] = useState(initialView === "feedbackAdmin");
   const [showRefundAdmin, setShowRefundAdmin] = useState(initialView === "refundAdmin");
+  const [showRevenueDashboard, setShowRevenueDashboard] = useState(initialView === "revenueDashboard");
   const [showAbout, setShowAbout] = useState(initialView === "about");
   const [showLegal, setShowLegal] = useState(initialView === "legal");
   const isAdmin = user?.email === "vashvinraj@gmail.com";
@@ -15081,6 +15288,9 @@ function Settings({ user, onLogout, theme, onSelectTheme, soundEnabled, onToggle
   }
   if (showRefundAdmin) {
     return <RefundAdminPage onBack={() => setShowRefundAdmin(false)} />;
+  }
+  if (showRevenueDashboard) {
+    return <RevenueDashboardPage onBack={() => setShowRevenueDashboard(false)} />;
   }
 
   const activeThemeInfo = THEMES.find((t) => t.key === theme) || THEMES[0];
@@ -15195,6 +15405,21 @@ function Settings({ user, onLogout, theme, onSelectTheme, soundEnabled, onToggle
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-[var(--text-primary)]">Issue a refund (Admin)</p>
               <p className="text-xs text-[var(--text-muted)] mt-0.5">Only visible to you — look up a customer and refund a payment</p>
+            </div>
+            <ChevronRight size={16} className="text-[var(--text-faint)] group-hover:text-[var(--accent-text)] group-hover:translate-x-0.5 transition-all shrink-0" />
+          </button>
+        </GlowCard>
+      )}
+
+      {isAdmin && (
+        <GlowCard>
+          <button onClick={() => setShowRevenueDashboard(true)} className="w-full flex items-center gap-3 text-left group">
+            <div className="h-11 w-11 rounded-xl shrink-0 bg-amber-500/20 flex items-center justify-center">
+              <TrendingUp size={18} className="text-amber-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-[var(--text-primary)]">Revenue Dashboard (Admin)</p>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">Only visible to you — payment history, revenue totals, and expenses</p>
             </div>
             <ChevronRight size={16} className="text-[var(--text-faint)] group-hover:text-[var(--accent-text)] group-hover:translate-x-0.5 transition-all shrink-0" />
           </button>
