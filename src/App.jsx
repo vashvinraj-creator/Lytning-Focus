@@ -9762,7 +9762,7 @@ function Insights({ refreshKey, goTo }) {
                     style={{ width: `${(d.minutes / maxMinutes) * 100}%` }}
                   />
                 </div>
-                <span className="text-xs text-[var(--text-secondary-strong)] w-14 text-right shrink-0">{d.minutes > 0 ? formatDuration(d.minutes * 60) : "—"}</span>
+                <span className="text-xs text-[var(--text-secondary-strong)] w-16 text-center shrink-0">{d.minutes > 0 ? formatDuration(d.minutes * 60) : "—"}</span>
               </div>
             ));
           })()}
