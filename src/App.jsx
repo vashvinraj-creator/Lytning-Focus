@@ -10567,7 +10567,7 @@ function HabitTracker({ refreshKey, goTo, initialYear, initialMonth, readOnly, o
                   {weeks.map((w) => (
                     <div key={w.label} className="bg-[var(--surface-2)]/40 rounded-xl p-3 text-center">
                       <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)] mb-1">{w.label}</p>
-                      <p className="text-sm font-bold text-[var(--text-primary)]">{w.completed}/{w.goal}</p>
+                      <p className="text-sm font-bold text-[var(--text-primary)] text-center tabular-nums">{w.completed}/{w.goal}</p>
                       <p className="text-[10px] text-[var(--text-muted)] mb-2">{w.pct}%</p>
                       <div className="h-1.5 rounded-full bg-[var(--surface-3)] overflow-hidden">
                         <div className="h-full bg-[var(--accent-hover)] transition-all duration-500" style={{ width: `${w.pct}%` }} />
@@ -15980,9 +15980,9 @@ export default function StudyFlowAI() {
 
   // On first load, check whether Supabase already has a valid session (e.g. after a refresh)
   // so the person doesn't get bounced back to the landing page every time.
-  async function checkRealSessionState() {
-    const { data } = await supabase.auth.getSession();
-    const sessionUser = data.session?.user;
+  async function checkRealSessionState(providedSession) {
+    const session = providedSession !== undefined ? providedSession : (await supabase.auth.getSession()).data.session;
+    const sessionUser = session?.user;
     if (sessionUser) {
       setUser({
         name: sessionUser.user_metadata?.full_name || sessionUser.email.split("@")[0],
@@ -16000,7 +16000,17 @@ export default function StudyFlowAI() {
   }
 
   useEffect(() => {
-    checkRealSessionState();
+    // onAuthStateChange's first callback (event "INITIAL_SESSION") fires
+    // once Supabase's client has genuinely finished restoring the session
+    // from storage — this is what a hard refresh actually needs, since a
+    // one-off getSession() call made immediately on mount can race ahead
+    // of that restoration and momentarily see "no session" even though a
+    // valid one exists, which is exactly what was showing Free instead of
+    // the real Pro/Basic tier right after a refresh.
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      checkRealSessionState(session);
+    });
+    return () => authListener.subscription.unsubscribe();
   }, []);
 
   // A kicked-out tab (signed out because this account logged in somewhere
