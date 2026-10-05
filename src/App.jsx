@@ -443,11 +443,25 @@ function localDateStr(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+// How tall the bolt is relative to the wordmark's font size. 1.5 makes it
+// clearly taller than the text (cap-top to descender) in every place the logo
+// appears, since the size always scales from the same text size. Change this
+// one number to make the bolt bigger or smaller everywhere at once.
+const LOGO_BOLT_RATIO = 1.5;
+
 function Logo({ size = 28 }) {
+  // `size` is the wordmark's font size in px. logo-mark.png is tightly
+  // cropped (no transparent padding), so its height IS the visible bolt height,
+  // and flex centering lines it up with the middle of the text line.
   return (
-    <div className="flex items-center gap-3">
-      <img src="/logo.png" alt="Lytning Focus" style={{ width: size, height: size }} className="shrink-0" />
-      <span className="font-semibold text-[var(--text-primary)] tracking-tight" style={{ fontSize: size * 1.0 }}>
+    <div className="flex items-center" style={{ gap: size * 0.5 }}>
+      <img
+        src="/logo-mark.png"
+        alt="Lytning Focus"
+        style={{ height: Math.round(size * LOGO_BOLT_RATIO), width: "auto" }}
+        className="block shrink-0"
+      />
+      <span className="font-semibold text-[var(--text-primary)] tracking-tight leading-none" style={{ fontSize: size }}>
         Lytning Focus
       </span>
     </div>
@@ -16499,7 +16513,7 @@ export default function StudyFlowAI() {
         </div>
       </aside>
 
-      <div className="md:hidden fixed top-0 inset-x-0 z-20 bg-[var(--overlay-bg-90)] backdrop-blur border-b border-[var(--border-subtle)] flex items-center justify-between px-4 py-3">
+      <div className="md:hidden fixed top-0 inset-x-0 z-20 bg-[var(--overlay-bg-90)] backdrop-blur border-b border-[var(--border-subtle)] flex items-center justify-between px-4 py-2">
         <Logo size={24} />
         <button onClick={() => setMobileMenuOpen(true)} className="text-[var(--text-secondary-strong)]">
           <Menu size={22} />
