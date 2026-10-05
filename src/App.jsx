@@ -446,7 +446,7 @@ function localDateStr(d = new Date()) {
 function Logo({ size = 28 }) {
   return (
     <div className="flex items-center gap-3">
-      <img src="/favicon.svg" alt="Lytning Focus" style={{ width: size, height: size }} className="shrink-0" />
+      <img src="/logo.png" alt="Lytning Focus" style={{ width: size, height: size }} className="shrink-0" />
       <span className="font-semibold text-[var(--text-primary)] tracking-tight" style={{ fontSize: size * 1.0 }}>
         Lytning Focus
       </span>
@@ -5422,7 +5422,7 @@ function GroupDashboard({ groupId, myUserId, onBack, goTo }) {
     let profileMap = {};
     if (memberIds.length > 0) {
       const [{ data: profilesData }, { data: presenceData }] = await Promise.all([
-        supabase.from("profiles").select("*").in("user_id", memberIds),
+        supabase.from("profiles").select("user_id, username, display_name, bio, avatar_url, character_style, premium_tier, ever_been_premium").in("user_id", memberIds),
         supabase.from("user_presence").select("*").in("user_id", memberIds),
       ]);
       (profilesData || []).forEach((p) => {
@@ -5544,7 +5544,7 @@ function GroupDashboard({ groupId, myUserId, onBack, goTo }) {
       setFriendsForInvite([]);
       return;
     }
-    const { data: profilesData } = await supabase.from("profiles").select("*").in("user_id", notMemberIds);
+    const { data: profilesData } = await supabase.from("profiles").select("user_id, username, display_name, bio, avatar_url, character_style, premium_tier, ever_been_premium").in("user_id", notMemberIds);
     setFriendsForInvite(profilesData || []);
   };
 
@@ -7163,7 +7163,7 @@ function Leaderboard({ refreshKey }) {
 
       const [sessionsRes, profilesRes] = await Promise.all([
         supabase.from("study_sessions").select("user_id, focused_seconds, completed_at").in("user_id", allIds),
-        supabase.from("profiles").select("*").in("user_id", allIds),
+        supabase.from("profiles").select("user_id, username, display_name, bio, avatar_url, character_style, premium_tier, ever_been_premium").in("user_id", allIds),
       ]);
 
       const now = new Date();
@@ -7407,7 +7407,7 @@ function Friends({ refreshKey, goTo }) {
       setFriendCount((reqData || []).filter((r) => r.status === "accepted").length);
       const otherIds = Array.from(new Set((reqData || []).map((r) => (r.sender_id === user.id ? r.receiver_id : r.sender_id))));
       if (otherIds.length > 0) {
-        const { data: profilesData, error: profilesError } = await supabase.from("profiles").select("*").in("user_id", otherIds);
+        const { data: profilesData, error: profilesError } = await supabase.from("profiles").select("user_id, username, display_name, bio, avatar_url, character_style, premium_tier, ever_been_premium").in("user_id", otherIds);
         if (profilesError) console.error("Friends — failed to load profiles for requests:", profilesError);
         const map = {};
         (profilesData || []).forEach((p) => {
@@ -8674,7 +8674,14 @@ function AvatarPickerModal({ onSelectBuiltin, onUploadCropped, onClose }) {
 
   const handleFileChange = (e) => {
     const file = e.target.files && e.target.files[0];
-    if (file) setCropFile(file);
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert("That image is too large — please choose one under 5MB.");
+        e.target.value = "";
+        return;
+      }
+      setCropFile(file);
+    }
     e.target.value = "";
   };
 
@@ -11987,7 +11994,7 @@ function Pricing({ goToLegal }) {
         <p className="text-xs text-[var(--text-faint)] mt-1.5">
           By upgrading, you agree to our{" "}
           <button onClick={() => goToLegal && goToLegal()} className="text-[var(--accent-text)] hover:underline font-medium">
-            Terms & Refund Policy
+            Privacy, Terms & Refund Policy
           </button>
           .
         </p>
@@ -13866,6 +13873,43 @@ const ABOUT_TOPICS = [
 
 const LEGAL_SECTIONS = [
   {
+    id: "privacy",
+    title: "Privacy Policy",
+    content: `Last updated: September 2026
+
+This explains what information Lytning Focus collects, why, and what you can do about it.
+
+**What we collect**
+- **Account info**: your email, username, display name, bio, and avatar (if you set one)
+- **Study data**: your tasks, habits, focus sessions, streaks, groups, and achievements — this is the actual content of using the app
+- **Optional info**: your date of birth, only if you choose to add it (used solely for a birthday greeting and gift — never shown on your public profile)
+- **Payment records**: your subscription plan, billing interval, and payment status — we never see or store your actual card/UPI details, Razorpay handles that entirely on their own secure systems
+- **Basic technical data**: standard things like IP address and browser type, collected automatically by our hosting infrastructure (Vercel/Supabase) for security and reliability, not for tracking you individually
+
+**How we use it**
+To run the app — save your progress, show your stats, process payments, send you the emails you'd expect (like refund confirmations), and prevent abuse (like fake accounts or payment fraud).
+
+**Who we share it with**
+- **Razorpay**: processes your payments; they receive what's needed to charge you, we don't see your card details in return
+- **Supabase**: hosts our database and authentication — industry-standard infrastructure, not a separate company we're handing your data to for their own purposes
+- We do not sell your data to anyone, ever, for any reason
+
+**Your data, your control**
+You can delete your account entirely at any time from Account Settings — this permanently removes your data with no way to restore it, including your study history, subscription records, and profile. If you'd rather just stop using the app without deleting anything, that's fine too — nothing forces continued use.
+
+**Data retention**
+We keep your data as long as your account exists. If you delete your account, it's gone — we don't keep hidden backups floating around indefinitely.
+
+**Children's privacy**
+Lytning Focus isn't intended for children under 13. If you believe a child has created an account, contact us and we'll remove it.
+
+**Changes to this policy**
+If this ever changes meaningfully, we'll update the date at the top. Continued use after changes means you accept the updated policy.
+
+**Contact**
+Questions about your data can be sent through the Feedback page in Settings, or to ryanlighton7business@gmail.com.`,
+  },
+  {
     id: "terms",
     title: "Terms of Service",
     content: `Last updated: September 2026
@@ -13923,7 +13967,7 @@ If you were charged more than once for the same purchase due to a technical erro
 ];
 
 function LegalPage({ onBack, initialSection }) {
-  const [openId, setOpenId] = useState(initialSection || "terms");
+  const [openId, setOpenId] = useState(initialSection || "privacy");
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -13940,7 +13984,7 @@ function LegalPage({ onBack, initialSection }) {
           <FileText size={19} className="text-white" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold text-[var(--text-primary)]">Terms & Refund Policy</h1>
+          <h1 className="text-xl font-semibold text-[var(--text-primary)]">Privacy, Terms & Refund Policy</h1>
           <p className="text-sm text-[var(--text-secondary)] mt-0.5">Clear, plain-language terms — no legal jargon maze.</p>
         </div>
       </div>
@@ -14025,6 +14069,7 @@ function RevenueDashboardPage({ onBack }) {
   const [addingExpense, setAddingExpense] = useState(false);
   const [expenseError, setExpenseError] = useState("");
   const [confirmingDeleteId, setConfirmingDeleteId] = useState(null);
+  const [expenseViewDate, setExpenseViewDate] = useState(new Date()); // which month is being browsed
 
   useEffect(() => {
     load();
@@ -14078,6 +14123,19 @@ function RevenueDashboardPage({ onBack }) {
   }
 
   const netAllTime = (data?.revenue_all_time || 0) - (data?.expenses_all_time || 0);
+
+  // Filters the already-fetched expense list down to whichever month is
+  // currently being browsed — no extra RPC call needed since the full
+  // history is already in memory.
+  const expensesForViewMonth = (data?.expenses || []).filter((e) => {
+    const d = new Date(e.created_at);
+    return d.getFullYear() === expenseViewDate.getFullYear() && d.getMonth() === expenseViewDate.getMonth();
+  });
+  const expensesForViewMonthTotal = expensesForViewMonth.reduce((sum, e) => sum + e.amount_paise, 0);
+  const expenseMonthLabel = expenseViewDate.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  const goPrevExpenseMonth = () => setExpenseViewDate((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
+  const goNextExpenseMonth = () => setExpenseViewDate((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
+  const isCurrentExpenseMonth = expenseViewDate.getFullYear() === new Date().getFullYear() && expenseViewDate.getMonth() === new Date().getMonth();
 
   return (
     <div className="max-w-3xl space-y-5">
@@ -14161,9 +14219,26 @@ function RevenueDashboardPage({ onBack }) {
         </div>
         {expenseError && <p className="text-xs text-red-400 mb-2">{expenseError}</p>}
 
-        {data?.expenses?.length > 0 && (
-          <div className="space-y-1.5 mt-3 pt-3 border-t border-[var(--border-subtle)]">
-            {data.expenses.map((e) => (
+        <div className="flex items-center justify-between mt-4 pt-3 border-t border-[var(--border-subtle)]">
+          <button onClick={goPrevExpenseMonth} className="h-8 w-8 rounded-lg bg-[var(--surface-2)] border border-[var(--card-border)] text-[var(--text-secondary-strong)] hover:bg-[var(--surface-3)] flex items-center justify-center transition-all active:scale-90">
+            <ChevronLeft size={15} />
+          </button>
+          <div className="text-center">
+            <p className="text-sm font-medium text-[var(--text-primary)]">{expenseMonthLabel}</p>
+            <p className="text-xs text-red-400 mt-0.5">{rupees(expensesForViewMonthTotal)} spent this month</p>
+          </div>
+          <button
+            onClick={goNextExpenseMonth}
+            disabled={isCurrentExpenseMonth}
+            className="h-8 w-8 rounded-lg bg-[var(--surface-2)] border border-[var(--card-border)] text-[var(--text-secondary-strong)] hover:bg-[var(--surface-3)] disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-all active:scale-90"
+          >
+            <ChevronRight size={15} />
+          </button>
+        </div>
+
+        {expensesForViewMonth.length > 0 ? (
+          <div className="space-y-1.5 mt-3">
+            {expensesForViewMonth.map((e) => (
               <div key={e.id} className="flex items-center justify-between text-sm gap-2">
                 <div className="min-w-0">
                   <p className="text-[var(--text-secondary-strong)] truncate">{e.description}</p>
@@ -14189,6 +14264,8 @@ function RevenueDashboardPage({ onBack }) {
               </div>
             ))}
           </div>
+        ) : (
+          <p className="text-sm text-[var(--text-muted)] text-center py-4">No expenses logged for {expenseMonthLabel}.</p>
         )}
       </GlowCard>
 
@@ -15455,7 +15532,7 @@ function Settings({ user, onLogout, theme, onSelectTheme, soundEnabled, onToggle
             <FileText size={16} className="text-[var(--text-secondary-strong)]" />
           </div>
           <div className="flex-1">
-            <p className="text-sm font-medium text-[var(--text-primary)]">Terms & Refund Policy</p>
+            <p className="text-sm font-medium text-[var(--text-primary)]">Privacy, Terms & Refund Policy</p>
             <p className="text-xs text-[var(--text-muted)] mt-0.5">Billing, cancellation, and refund details</p>
           </div>
           <ChevronRight size={16} className="text-[var(--text-faint)] group-hover:text-[var(--accent-text)] group-hover:translate-x-0.5 transition-all shrink-0" />
