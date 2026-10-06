@@ -11797,6 +11797,11 @@ function PaymentNoticeModal({ notice, onClose }) {
 // Prices live in the plan_prices table (smallest unit: paise / cents). The page
 // picks a currency from the visitor's browser region, and an existing subscriber
 // always keeps the currency they are billed in.
+// Rough rupees-per-dollar rate, used ONLY to show an approximate "≈ $" amount beside rupee prices.
+// Customers are still charged in rupees. Update this number every now and then.
+const INR_PER_USD = 94;
+// "/ month" -> "per month" (so a price line reads "₹299 / ≈ $3.18 per month" with only one slash)
+const perPeriodText = (p) => { const w = String(p).replace(/^\/\s*/, ""); return w === "forever" ? "forever" : "per " + w; };
 const FALLBACK_INR_PRICES = { basic_monthly: 9900, premium_monthly: 29900, premium_yearly: 299900, lifetime: 1499900 };
 const CURRENCY_LABELS = { USD: "$ USD", EUR: "€ EUR", CAD: "CA$ CAD" };
 const EURO_REGIONS = new Set(["AT","BE","BG","HR","CY","EE","FI","FR","DE","GR","IE","IT","LV","LT","LU","MT","NL","PT","SK","SI","ES"]);
@@ -12106,6 +12111,8 @@ function Pricing({ goToLegal }) {
   const pricesReady = pricingConfig !== null || detectedCurrency === "INR";
   const showCurrencySwitch = !lockedCurrency && detectedCurrency !== "INR" && foreignCurrencies.length > 1;
   const money = (minor) => formatMoney(minor, currency);
+  // Only beside RUPEE prices: the approximate dollar amount of the same price (cents = paise / rate).
+  const dollarNote = (minor) => (currency === "INR" ? (minor === 0 ? "$0" : "≈ " + formatMoney(Math.round(minor / INR_PER_USD), "USD")) : null);
 
   const basicMonthlyMinor = prices.basic_monthly;
   const proMonthlyMinor = prices.premium_monthly;
@@ -12119,14 +12126,15 @@ function Pricing({ goToLegal }) {
   const isYearly = proBilling === "yearly";
 
   const plans = [
-    { key: "free", label: "Free", positioning: "Try Lytning Focus", price: money(0), period: "/ forever", features: PRICING_FREE_FEATURES, icon: null, headerLabel: "Includes" },
-    { key: "basic", label: "Basic", positioning: "For regular students", tagline: "Student Pack", price: money(basicMonthlyMinor), period: "/ month", features: PRICING_BASIC_FEATURES, icon: Sparkles, headerLabel: "Everything in Free, plus", cta: "Upgrade to Basic" },
+    { key: "free", label: "Free", positioning: "Try Lytning Focus", price: money(0), usdEq: dollarNote(0), period: "/ forever", features: PRICING_FREE_FEATURES, icon: null, headerLabel: "Includes" },
+    { key: "basic", label: "Basic", positioning: "For regular students", tagline: "Student Pack", price: money(basicMonthlyMinor), usdEq: dollarNote(basicMonthlyMinor), period: "/ month", features: PRICING_BASIC_FEATURES, icon: Sparkles, headerLabel: "Everything in Free, plus", cta: "Upgrade to Basic" },
     {
       key: "pro",
       label: "Pro",
       positioning: isYearly ? "Best value for committed students" : "For serious daily study",
       tagline: "Full Access",
       price: isYearly ? money(proYearlyMinor) : money(proMonthlyMinor),
+      usdEq: isYearly ? dollarNote(proYearlyMinor) : dollarNote(proMonthlyMinor),
       strikePrice: isYearly ? money(proYearlyReferenceMinor) : undefined,
       period: isYearly ? "/ year" : "/ month",
       sub: isYearly ? `\u2248 ${money(proYearlyEquivalentMonthlyMinor)}/month \u2014 save ${proYearlySavingsPct}%` : undefined,
@@ -12183,6 +12191,11 @@ function Pricing({ goToLegal }) {
           </button>
           .
         </p>
+        {currency === "INR" && (
+          <p className="text-[11px] text-[var(--text-faint)] mt-1.5">
+            You're charged in Indian rupees (₹). Dollar amounts are approximate, at about ₹{INR_PER_USD} = $1.
+          </p>
+        )}
         {showCurrencySwitch && (
           <div className="mt-3 inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface-2)] p-1 text-xs">
             {foreignCurrencies.map((c) => (
@@ -12246,7 +12259,8 @@ function Pricing({ goToLegal }) {
             )}
             <p className="text-3xl font-bold text-[var(--text-primary)] mb-0.5" style={{ opacity: pricesReady ? 1 : 0, transition: "opacity .2s" }}>
               {plan.price}
-              <span className="text-sm font-normal text-[var(--text-muted)]"> {plan.period}</span>
+              {plan.usdEq && <span className="text-base font-medium text-[var(--text-secondary)] whitespace-nowrap"> / {plan.usdEq}</span>}
+              <span className="text-sm font-normal text-[var(--text-muted)]"> {plan.usdEq ? perPeriodText(plan.period) : plan.period}</span>
               {plan.strikePrice && <span className="text-lg font-medium text-[var(--text-secondary)] line-through ml-2">{plan.strikePrice}</span>}
             </p>
             {plan.sub && <p className="text-xs text-emerald-400 mb-3">{plan.sub}</p>}
@@ -12345,7 +12359,7 @@ function Pricing({ goToLegal }) {
               <p className="text-sm text-[var(--text-secondary)]">The ultimate choice — full access, forever. Pay once, never think about billing again.</p>
             </div>
             <div className="text-center shrink-0">
-              <p className="text-3xl font-bold text-[var(--text-primary)]" style={{ opacity: pricesReady ? 1 : 0, transition: "opacity .2s" }}>Just {money(lifetimeMinor)}</p>
+              <p className="text-3xl font-bold text-[var(--text-primary)]" style={{ opacity: pricesReady ? 1 : 0, transition: "opacity .2s" }}>Just {money(lifetimeMinor)}{dollarNote(lifetimeMinor) && <span className="text-base font-medium text-[var(--text-secondary)] whitespace-nowrap"> / {dollarNote(lifetimeMinor)}</span>}</p>
               <p className="text-xs text-[var(--text-faint)]">one-time payment</p>
             </div>
             <button
