@@ -23,7 +23,7 @@ import {
   Home, Timer, CheckSquare, BarChart3, Bot, Layers, Calendar, Settings as SettingsIcon,
   LogOut, Menu, X, Eye, EyeOff, Plus, Trash2, Play, Pause, RotateCcw, SkipForward,
   Send, Copy, Flame, Sparkles, ChevronRight, ChevronLeft, ChevronUp, ChevronDown, Check, Zap, Bell, User,
-  Lock, Mail, ArrowRight, TrendingUp, Clock, FileText, Crown, Loader2, AlertTriangle, Pencil, Users, Trophy, Search, Download, Image as ImageIcon, Smartphone, MessageSquare, UserX, Star, HelpCircle, Gift, IndianRupee
+  Lock, Mail, ArrowRight, TrendingUp, Clock, FileText, Crown, Loader2, AlertTriangle, Pencil, Users, Trophy, Search, Download, Image as ImageIcon, Smartphone, MessageSquare, UserX, Star, HelpCircle, Gift, IndianRupee, Globe
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, LineChart, Line,
@@ -11714,6 +11714,128 @@ const PRICING_PREMIUM_FEATURES = [
 // gets it.
 const PRICING_YEARLY_FEATURES = [...PRICING_PREMIUM_FEATURES, { text: "Streak Restore — 6 per year", exclusive: true }];
 
+// ---- A proper, closable notice for the payment outcome ----------------------
+// kind: "failed" (the payment didn't go through), "confirming" (paid, waiting for the plan to switch on),
+// "activated" (all good, page about to refresh), "delayed" (paid, plan not on yet: handled automatically).
+function PaymentNoticeModal({ notice, onClose }) {
+  if (!notice) return null;
+  const closable = notice.kind === "failed" || notice.kind === "delayed";
+  const content = {
+    failed: {
+      title: "Payment didn't go through",
+      body: "You haven't been charged for this purchase. If your bank shows a deduction, it is usually a temporary hold that returns on its own within a few working days.",
+      extra: "If a payment ever does go through but your plan doesn't switch on, it is fixed or refunded automatically, usually within 20 minutes.",
+    },
+    confirming: {
+      title: "Confirming your payment…",
+      body: "Please keep this page open. It only takes a few seconds.",
+    },
+    activated: {
+      title: "You're all set",
+      body: "Your plan is active. Refreshing now…",
+    },
+    delayed: {
+      title: "We've received your payment",
+      body: "Your plan hasn't switched on yet. This is checked automatically: you'll either get your plan, or your money back, with nothing for you to do. It usually takes under 20 minutes.",
+      extra: "You can close this and keep using the app.",
+    },
+  }[notice.kind];
+  if (!content) return null;
+
+  return (
+    <div
+      className="fixed inset-0 md:left-60 lg:left-64 z-[400] flex items-center justify-center p-4"
+      onClick={closable ? onClose : undefined}
+    >
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+        className="relative bg-[var(--surface-solid)] border border-[var(--border)] rounded-3xl p-6 max-w-sm w-full text-center shadow-xl"
+      >
+        {closable && (
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="absolute top-3 right-3 h-8 w-8 rounded-full flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"
+          >
+            <X size={16} />
+          </button>
+        )}
+        <div className="flex justify-center mb-3">
+          {notice.kind === "failed" && (
+            <span className="h-11 w-11 rounded-full bg-red-500/15 flex items-center justify-center"><AlertTriangle size={22} className="text-red-400" /></span>
+          )}
+          {notice.kind === "confirming" && (
+            <span className="h-11 w-11 rounded-full bg-[rgb(var(--accent-rgb)/0.15)] flex items-center justify-center"><Loader2 size={22} className="text-[var(--accent-text)] animate-spin" /></span>
+          )}
+          {(notice.kind === "activated" || notice.kind === "delayed") && (
+            <span className="h-11 w-11 rounded-full bg-emerald-500/15 flex items-center justify-center"><Check size={22} className="text-emerald-400" /></span>
+          )}
+        </div>
+        <p className="text-base font-semibold text-[var(--text-primary)] mb-2">{content.title}</p>
+        <p className="text-sm text-[var(--text-muted)]">{content.body}</p>
+        {notice.kind === "failed" && notice.detail && (
+          <p className="text-xs text-[var(--text-faint)] mt-3">Reason from the bank: {notice.detail}</p>
+        )}
+        {content.extra && <p className="text-xs text-[var(--text-secondary)] mt-3">{content.extra}</p>}
+        {closable && (
+          <button
+            onClick={onClose}
+            className="mt-5 w-full bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-sm font-medium py-2.5 rounded-xl transition-colors"
+          >
+            Close
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---- Currency helpers for the pricing page ---------------------------------
+// Prices live in the plan_prices table (smallest unit: paise / cents). The page
+// picks a currency from the visitor's browser region, and an existing subscriber
+// always keeps the currency they are billed in.
+const FALLBACK_INR_PRICES = { basic_monthly: 9900, premium_monthly: 29900, premium_yearly: 299900, lifetime: 1499900 };
+const CURRENCY_LABELS = { USD: "$ USD", EUR: "€ EUR", CAD: "CA$ CAD" };
+const EURO_REGIONS = new Set(["AT","BE","BG","HR","CY","EE","FI","FR","DE","GR","IE","IT","LV","LT","LU","MT","NL","PT","SK","SI","ES"]);
+const EURO_TIMEZONES = new Set(["Europe/Berlin","Europe/Busingen","Europe/Paris","Europe/Madrid","Africa/Ceuta","Atlantic/Canary","Europe/Rome","Europe/Amsterdam","Europe/Brussels","Europe/Vienna","Europe/Dublin","Europe/Lisbon","Atlantic/Azores","Atlantic/Madeira","Europe/Helsinki","Europe/Athens","Europe/Luxembourg","Europe/Malta","Europe/Bratislava","Europe/Ljubljana","Europe/Tallinn","Europe/Riga","Europe/Vilnius","Europe/Zagreb","Europe/Sofia","Asia/Nicosia","Europe/Nicosia"]);
+const CANADA_TIMEZONES = new Set(["America/Toronto","America/Vancouver","America/Edmonton","America/Winnipeg","America/Halifax","America/St_Johns","America/Regina","America/Montreal","America/Moncton","America/Glace_Bay","America/Goose_Bay","America/Whitehorse","America/Yellowknife","America/Iqaluit","America/Rankin_Inlet","America/Cambridge_Bay","America/Thunder_Bay","America/Nipigon","America/Dawson","America/Dawson_Creek","America/Fort_Nelson","America/Creston","America/Swift_Current","America/Resolute","America/Inuvik","America/Pangnirtung","America/Rainy_River","America/Atikokan","America/Blanc-Sablon","America/Coral_Harbour"]);
+
+function detectCurrency() {
+  let tz = "";
+  let region = "";
+  try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) { /* ignore */ }
+  try {
+    const lang = (navigator.languages && navigator.languages[0]) || navigator.language || "";
+    region = (lang.split("-")[1] || "").toUpperCase();
+  } catch (e) { /* ignore */ }
+  // Timezone first: plenty of browsers in India report en-US as their language.
+  if (tz === "Asia/Kolkata" || tz === "Asia/Calcutta") return "INR";
+  if (CANADA_TIMEZONES.has(tz)) return "CAD";
+  if (EURO_TIMEZONES.has(tz)) return "EUR";
+  if (region === "IN") return "INR";
+  if (region === "CA") return "CAD";
+  if (EURO_REGIONS.has(region)) return "EUR";
+  return "USD"; // everywhere else sees dollars
+}
+
+function formatMoney(minor, currency) {
+  const major = minor / 100;
+  const whole = Number.isInteger(major);
+  try {
+    return new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", {
+      style: "currency",
+      currency,
+      minimumFractionDigits: whole ? 0 : 2,
+      maximumFractionDigits: 2,
+    }).format(major);
+  } catch (e) {
+    return `${currency} ${major}`;
+  }
+}
+
 function Pricing({ goToLegal }) {
   const { requireAuth } = useRequireAuth();
   const [myTier, setMyTier] = useState(null); // null while loading — avoids Free wrongly flashing as "current" before the real tier loads
@@ -11723,6 +11845,30 @@ function Pricing({ goToLegal }) {
   const [checkoutError, setCheckoutError] = useState("");
   const [checkoutErrorKey, setCheckoutErrorKey] = useState(0);
   const [lifetimeLoading, setLifetimeLoading] = useState(false);
+  const [pricingConfig, setPricingConfig] = useState(null); // { INR: { available, prices: {...} }, USD: {...} } | null while loading
+  const [currencyChoice, setCurrencyChoice] = useState(null); // a visitor's manual pick from the switch, if any
+  const [paymentNotice, setPaymentNotice] = useState(null); // { kind, detail? } shown in PaymentNoticeModal
+  const attemptRef = useRef({ failedReason: null, paid: false }); // what happened inside the current checkout popup
+
+  function startAttempt() {
+    attemptRef.current = { failedReason: null, paid: false };
+  }
+
+  // After the popup reports success, don't just trust it and reload: wait (up to ~40s) until the plan really
+  // is active. If it isn't yet, tell the person plainly; the server's automatic check will fix it or refund it.
+  async function confirmActivation() {
+    setPaymentNotice({ kind: "confirming" });
+    for (let i = 0; i < 20; i++) {
+      const { data } = await supabase.rpc("get_my_subscription_status");
+      if (data && (data.is_lifetime || data.status === "active")) {
+        setPaymentNotice({ kind: "activated" });
+        setTimeout(() => window.location.reload(), 1200);
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+    setPaymentNotice({ kind: "delayed" });
+  }
 
   async function handleLifetimePurchase() {
     const { data: { session } } = await supabase.auth.getSession();
@@ -11739,7 +11885,7 @@ function Pricing({ goToLegal }) {
 
     const [scriptLoaded, { data: orderData, error: orderError }] = await Promise.all([
       loadRazorpayScript(),
-      supabase.functions.invoke("create-lifetime-order", { body: {} }),
+      supabase.functions.invoke("create-lifetime-order", { body: { currency } }),
     ]);
 
     if (!scriptLoaded || orderError || !orderData) {
@@ -11748,6 +11894,8 @@ function Pricing({ goToLegal }) {
       setLifetimeLoading(false);
       return;
     }
+
+    startAttempt();
 
     const rzp = new window.Razorpay({
       key: orderData.key_id,
@@ -11758,25 +11906,25 @@ function Pricing({ goToLegal }) {
       description: "Premium — Lifetime (one-time payment, never expires)",
       theme: { color: "#8b5cf6" },
       handler: function () {
-        // Same principle as every other checkout here — the frontend
-        // never grants access itself. This just tells the person to
-        // expect it, and refreshes once the webhook actually confirms
-        // the payment server-side.
+        // The frontend never grants access itself: it waits until the server has really activated the plan.
+        attemptRef.current.paid = true;
         setLifetimeLoading(false);
-        alert("You got premium for life! 🎉 Refreshing now.");
-        setTimeout(() => window.location.reload(), 1500);
+        confirmActivation();
       },
       modal: {
         ondismiss: function () {
           setLifetimeLoading(false);
+          // The popup was closed after a failed attempt and no success: now show the closable notice.
+          if (!attemptRef.current.paid && attemptRef.current.failedReason !== null) {
+            setPaymentNotice({ kind: "failed", detail: attemptRef.current.failedReason });
+          }
         },
       },
     });
 
+    // The popup has its own retry screen, so just remember why it failed; the notice appears if they close it.
     rzp.on("payment.failed", function (response) {
-      setCheckoutError(`Payment failed: ${response.error.description || "please try again."}`);
-      setCheckoutErrorKey((k) => k + 1);
-      setLifetimeLoading(false);
+      attemptRef.current.failedReason = (response && response.error && response.error.description) || "";
     });
 
     rzp.open();
@@ -11788,6 +11936,7 @@ function Pricing({ goToLegal }) {
 
   useEffect(() => {
     supabase.rpc("get_my_subscription_status").then(({ data }) => setSubStatus(data));
+    supabase.rpc("get_pricing_config").then(({ data }) => setPricingConfig(data || {}));
     loadRazorpayScript(); // preload now, so it's already ready by the time someone clicks Upgrade
   }, []);
 
@@ -11851,7 +12000,7 @@ function Pricing({ goToLegal }) {
     const [scriptLoaded, { data: subData, error: subError }] = await Promise.all([
       loadRazorpayScript(),
       supabase.functions.invoke("create-razorpay-subscription", {
-        body: { plan: planKey, billing_interval: billingInterval },
+        body: { plan: planKey, billing_interval: billingInterval, currency },
       }),
     ]);
 
@@ -11869,6 +12018,8 @@ function Pricing({ goToLegal }) {
       return;
     }
 
+    startAttempt();
+
     const rzp = new window.Razorpay({
       key: subData.key_id,
       subscription_id: subData.razorpay_subscription_id,
@@ -11876,28 +12027,25 @@ function Pricing({ goToLegal }) {
       description: `${planKey === "premium" ? "Pro" : "Basic"} — ${billingInterval === "yearly" ? "Yearly" : "Monthly"} (auto-renews until cancelled)`,
       theme: { color: "#8b5cf6" },
       handler: function () {
-        // The frontend NEVER grants premium itself on this callback — it
-        // only means the checkout popup completed successfully from the
-        // user's side. The actual account upgrade only happens once
-        // Razorpay's webhook independently confirms the payment
-        // server-side, which is the only thing that calls
-        // grant_subscription_plan(). This just tells the person to expect
-        // it shortly, and refreshes to pick it up once it lands.
+        // The frontend NEVER grants premium itself: it waits until the server has really activated the plan.
+        attemptRef.current.paid = true;
         setCheckoutLoadingPlan(null);
-        alert("Payment received! Your plan will update within a few seconds — refreshing now.");
-        setTimeout(() => window.location.reload(), 1500);
+        confirmActivation();
       },
       modal: {
         ondismiss: function () {
           setCheckoutLoadingPlan(null);
+          // The popup was closed after a failed attempt and no success: now show the closable notice.
+          if (!attemptRef.current.paid && attemptRef.current.failedReason !== null) {
+            setPaymentNotice({ kind: "failed", detail: attemptRef.current.failedReason });
+          }
         },
       },
     });
 
+    // The popup has its own retry screen, so just remember why it failed; the notice appears if they close it.
     rzp.on("payment.failed", function (response) {
-      setCheckoutError(`Payment failed: ${response.error.description || "please try again."}`);
-      setCheckoutErrorKey((k) => k + 1);
-      setCheckoutLoadingPlan(null);
+      attemptRef.current.failedReason = (response && response.error && response.error.description) || "";
     });
 
     rzp.open();
@@ -11939,27 +12087,49 @@ function Pricing({ goToLegal }) {
     })();
   }, []);
 
-  const proMonthlyBasic = 99;
-  const proMonthly = 299;
-  const proYearly = 2999;
-  const proYearlyReference = proMonthly * 12; // ₹3,588 — the actual math reference, not a separate marketing number
-  const proYearlyEquivalentMonthly = Math.round(proYearly / 12); // ≈ ₹250
-  const proYearlySavingsPct = Math.round((1 - proYearly / proYearlyReference) * 100); // rounds to 16, per spec — never shown with a decimal
+  // ---- which currency to show, and what everything costs in it ----
+  const detectedCurrency = detectCurrency();
+  const availableCurrencies = pricingConfig && Object.keys(pricingConfig).length > 0 ? Object.keys(pricingConfig) : ["INR"];
+  const foreignCurrencies = availableCurrencies.filter((c) => c !== "INR");
+  // An existing subscriber keeps the currency they are billed in (plans can't switch currency mid-cycle).
+  const lockedCurrency =
+    subStatus && subStatus.currency && (subStatus.is_lifetime || subStatus.status === "active" || subStatus.status === "past_due")
+      ? subStatus.currency
+      : null;
+  let currency = lockedCurrency || currencyChoice || detectedCurrency;
+  if (!availableCurrencies.includes(currency)) {
+    currency = currency !== "INR" && availableCurrencies.includes("USD") ? "USD" : "INR";
+  }
+  const prices = (pricingConfig && pricingConfig[currency] && pricingConfig[currency].prices) || FALLBACK_INR_PRICES;
+  // Don't flash rupees at someone who is about to see dollars: hide prices until the config has loaded
+  // (visitors from India see their rupee prices immediately, since those are the fallback).
+  const pricesReady = pricingConfig !== null || detectedCurrency === "INR";
+  const showCurrencySwitch = !lockedCurrency && detectedCurrency !== "INR" && foreignCurrencies.length > 1;
+  const money = (minor) => formatMoney(minor, currency);
+
+  const basicMonthlyMinor = prices.basic_monthly;
+  const proMonthlyMinor = prices.premium_monthly;
+  const proYearlyMinor = prices.premium_yearly;
+  const lifetimeMinor = prices.lifetime;
+  const proYearlyReferenceMinor = proMonthlyMinor * 12; // the honest reference: twelve monthly payments
+  // "≈ per month" figure: whole rupees for INR (as before), exact cents for other currencies
+  const proYearlyEquivalentMonthlyMinor = currency === "INR" ? Math.round(proYearlyMinor / 12 / 100) * 100 : Math.round(proYearlyMinor / 12);
+  const proYearlySavingsPct = Math.round((1 - proYearlyMinor / proYearlyReferenceMinor) * 100); // never shown with a decimal
 
   const isYearly = proBilling === "yearly";
 
   const plans = [
-    { key: "free", label: "Free", positioning: "Try Lytning Focus", price: "\u20b90", period: "/ forever", features: PRICING_FREE_FEATURES, icon: null, headerLabel: "Includes" },
-    { key: "basic", label: "Basic", positioning: "For regular students", tagline: "Student Pack", price: `\u20b9${proMonthlyBasic}`, period: "/ month", features: PRICING_BASIC_FEATURES, icon: Sparkles, headerLabel: "Everything in Free, plus", cta: "Upgrade to Basic" },
+    { key: "free", label: "Free", positioning: "Try Lytning Focus", price: money(0), period: "/ forever", features: PRICING_FREE_FEATURES, icon: null, headerLabel: "Includes" },
+    { key: "basic", label: "Basic", positioning: "For regular students", tagline: "Student Pack", price: money(basicMonthlyMinor), period: "/ month", features: PRICING_BASIC_FEATURES, icon: Sparkles, headerLabel: "Everything in Free, plus", cta: "Upgrade to Basic" },
     {
       key: "pro",
       label: "Pro",
       positioning: isYearly ? "Best value for committed students" : "For serious daily study",
       tagline: "Full Access",
-      price: isYearly ? `\u20b9${proYearly}` : `\u20b9${proMonthly}`,
-      strikePrice: isYearly ? `\u20b9${proYearlyReference}` : undefined,
+      price: isYearly ? money(proYearlyMinor) : money(proMonthlyMinor),
+      strikePrice: isYearly ? money(proYearlyReferenceMinor) : undefined,
       period: isYearly ? "/ year" : "/ month",
-      sub: isYearly ? `\u2248 \u20b9${proYearlyEquivalentMonthly}/month \u2014 save ${proYearlySavingsPct}%` : undefined,
+      sub: isYearly ? `\u2248 ${money(proYearlyEquivalentMonthlyMinor)}/month \u2014 save ${proYearlySavingsPct}%` : undefined,
       features: isYearly ? PRICING_YEARLY_FEATURES : PRICING_PREMIUM_FEATURES,
       icon: Crown,
       highlight: true,
@@ -12013,6 +12183,19 @@ function Pricing({ goToLegal }) {
           </button>
           .
         </p>
+        {showCurrencySwitch && (
+          <div className="mt-3 inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface-2)] p-1 text-xs">
+            {foreignCurrencies.map((c) => (
+              <button
+                key={c}
+                onClick={() => setCurrencyChoice(c)}
+                className={"px-3 py-1 rounded-full font-medium transition-colors " + (currency === c ? "bg-[var(--accent)] text-white" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]")}
+              >
+                {CURRENCY_LABELS[c] || c}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="grid sm:grid-cols-3 gap-4">
@@ -12061,7 +12244,7 @@ function Pricing({ goToLegal }) {
                 </button>
               </div>
             )}
-            <p className="text-3xl font-bold text-[var(--text-primary)] mb-0.5">
+            <p className="text-3xl font-bold text-[var(--text-primary)] mb-0.5" style={{ opacity: pricesReady ? 1 : 0, transition: "opacity .2s" }}>
               {plan.price}
               <span className="text-sm font-normal text-[var(--text-muted)]"> {plan.period}</span>
               {plan.strikePrice && <span className="text-lg font-medium text-[var(--text-secondary)] line-through ml-2">{plan.strikePrice}</span>}
@@ -12162,7 +12345,7 @@ function Pricing({ goToLegal }) {
               <p className="text-sm text-[var(--text-secondary)]">The ultimate choice — full access, forever. Pay once, never think about billing again.</p>
             </div>
             <div className="text-center shrink-0">
-              <p className="text-3xl font-bold text-[var(--text-primary)]">Just ₹14,999</p>
+              <p className="text-3xl font-bold text-[var(--text-primary)]" style={{ opacity: pricesReady ? 1 : 0, transition: "opacity .2s" }}>Just {money(lifetimeMinor)}</p>
               <p className="text-xs text-[var(--text-faint)]">one-time payment</p>
             </div>
             <button
@@ -12181,6 +12364,8 @@ function Pricing({ goToLegal }) {
           </div>
         </GlowCard>
       </div>
+
+      <PaymentNoticeModal notice={paymentNotice} onClose={() => setPaymentNotice(null)} />
 
       {showCancelConfirm && (
         <div className="fixed inset-0 md:left-60 lg:left-64 z-[400] flex items-center justify-center p-4" onClick={() => setShowCancelConfirm(false)}>
@@ -14085,6 +14270,7 @@ function RevenueDashboardPage({ onBack }) {
   const [expenseError, setExpenseError] = useState("");
   const [confirmingDeleteId, setConfirmingDeleteId] = useState(null);
   const [expenseViewDate, setExpenseViewDate] = useState(new Date()); // which month is being browsed
+  const [recoveries, setRecoveries] = useState([]); // what the automatic payment recovery has done
 
   useEffect(() => {
     load();
@@ -14092,9 +14278,13 @@ function RevenueDashboardPage({ onBack }) {
 
   async function load() {
     setLoading(true);
-    const { data: result, error } = await supabase.rpc("admin_get_revenue_dashboard");
+    const [{ data: result, error }, { data: rec }] = await Promise.all([
+      supabase.rpc("admin_get_revenue_dashboard"),
+      supabase.rpc("admin_get_payment_recoveries"),
+    ]);
     setLoading(false);
     if (!error) setData(result);
+    setRecoveries(Array.isArray(rec) ? rec : []);
   }
 
   const rupees = (paise) => `₹${(paise / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
@@ -14207,6 +14397,53 @@ function RevenueDashboardPage({ onBack }) {
         </div>
       </GlowCard>
 
+      {data?.other_currency_revenue && Object.keys(data.other_currency_revenue).length > 0 && (
+        <GlowCard>
+          <p className="text-sm font-medium text-[var(--text-primary)] mb-1">Other currencies</p>
+          <p className="text-xs text-[var(--text-muted)] mb-3">
+            Kept separate on purpose: these are not added into the ₹ totals above. Your expenses are logged in ₹, so Net Profit above covers rupee revenue only.
+          </p>
+          <div className="space-y-2.5">
+            {Object.entries(data.other_currency_revenue).map(([cur, v]) => (
+              <div key={cur} className="grid grid-cols-5 gap-2 items-center text-center text-sm">
+                <span className="text-left font-semibold text-[var(--text-primary)]">{cur}</span>
+                {[["today", v.today], ["month", v.month], ["year", v.year], ["all time", v.all_time]].map(([label, amt]) => (
+                  <span key={label} className="text-emerald-400 font-medium">
+                    {formatMoney(amt || 0, cur)}
+                    <span className="block text-[10px] font-normal text-[var(--text-faint)]">{label}</span>
+                  </span>
+                ))}
+              </div>
+            ))}
+          </div>
+        </GlowCard>
+      )}
+
+      {recoveries.length > 0 && (
+        <GlowCard>
+          <p className="text-sm font-medium text-[var(--text-primary)] mb-1">Automatic payment recoveries</p>
+          <p className="text-xs text-[var(--text-muted)] mb-3">
+            Times a customer paid but their plan had not switched on, and what the system did about it.
+          </p>
+          <div className="space-y-3">
+            {recoveries.map((r) => {
+              const labels = { granted: "Activated automatically", refunded: "Refunded automatically", refund_held: "Needs your attention", refund_failed: "Refund failed: refund manually" };
+              const tone = r.action === "granted" ? "bg-emerald-500/15 text-emerald-400" : r.action === "refunded" ? "bg-sky-500/15 text-sky-400" : "bg-red-500/15 text-red-400";
+              return (
+                <div key={r.id} className="text-sm border-b border-[var(--border-subtle)] last:border-0 pb-3 last:pb-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[var(--text-primary)] truncate">{r.username} · {formatMoney(r.amount_minor || 0, r.currency || "INR")}</span>
+                    <span className={"text-[11px] font-medium px-2 py-0.5 rounded-full shrink-0 " + tone}>{labels[r.action] || r.action}</span>
+                  </div>
+                  <p className="text-xs text-[var(--text-muted)] mt-1">{r.detail}</p>
+                  <p className="text-[10px] text-[var(--text-faint)] mt-0.5">{new Date(r.created_at).toLocaleString()} · {r.payment_id}</p>
+                </div>
+              );
+            })}
+          </div>
+        </GlowCard>
+      )}
+
       {/* Expense tracker */}
       <GlowCard>
         <p className="text-sm font-medium text-[var(--text-primary)] mb-3">Log an expense</p>
@@ -14300,7 +14537,7 @@ function RevenueDashboardPage({ onBack }) {
                   </p>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-emerald-400 font-medium">{rupees(p.amount_paise)}</p>
+                  <p className="text-emerald-400 font-medium">{formatMoney(p.amount_paise, p.currency || "INR")}</p>
                   <p className="text-[10px] text-[var(--text-faint)]">
                     {p.plan === "lifetime" ? "Lifetime" : p.plan === "premium" ? "Pro" : "Basic"}
                     {p.billing_interval && p.billing_interval !== "lifetime" ? ` · ${p.billing_interval}` : ""}
@@ -14311,6 +14548,181 @@ function RevenueDashboardPage({ onBack }) {
           </div>
         )}
       </GlowCard>
+    </div>
+  );
+}
+
+function PricingAdminPage({ onBack }) {
+  const [rows, setRows] = useState(null);
+  const [loadError, setLoadError] = useState("");
+  const [busy, setBusy] = useState(null); // the currency being worked on
+  const [message, setMessage] = useState(null); // { type: "ok" | "error", text }
+
+  const PACK_LABELS = { basic_monthly: "Basic / month", premium_monthly: "Pro / month", premium_yearly: "Pro / year", lifetime: "Lifetime" };
+  const packKey = (r) => (r.plan === "lifetime" ? "lifetime" : `${r.plan}_${r.billing_interval}`);
+
+  async function load() {
+    const { data, error } = await supabase.rpc("admin_get_pricing_overview");
+    if (error) {
+      setLoadError("Couldn't load pricing — please try again.");
+      return;
+    }
+    setLoadError("");
+    setRows(data || []);
+  }
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function createPlans(currency) {
+    setBusy(currency);
+    setMessage(null);
+    const { data, error } = await supabase.functions.invoke("admin-sync-razorpay-plans", { body: { currency } });
+    setBusy(null);
+    let detail = data?.error;
+    if (!detail && error?.context?.json) {
+      try {
+        detail = (await error.context.json())?.error;
+      } catch (e) {
+        /* ignore */
+      }
+    }
+    if (error || !data || data.error) {
+      setMessage({ type: "error", text: detail || "Couldn't reach Razorpay — please try again." });
+      return;
+    }
+    const failed = (data.results || []).filter((r) => !r.ok);
+    if (data.nothing_to_do) {
+      setMessage({ type: "ok", text: `All ${currency} plans already exist in Razorpay.` });
+    } else if (failed.length > 0) {
+      setMessage({
+        type: "error",
+        text: `Created ${data.created}, but Razorpay refused: ${failed.map((f) => `${f.pack} — ${f.error}`).join("; ")}`,
+      });
+    } else {
+      setMessage({ type: "ok", text: `Created ${data.created} ${currency} plans in Razorpay.` });
+    }
+    load();
+  }
+
+  async function setActive(currency, active) {
+    setBusy(currency);
+    setMessage(null);
+    const { error } = await supabase.rpc("admin_set_currency_active", { p_currency: currency, p_active: active });
+    setBusy(null);
+    if (error) {
+      setMessage({ type: "error", text: error.message });
+      return;
+    }
+    setMessage({ type: "ok", text: active ? `${currency} prices are now showing to customers.` : `${currency} prices are switched off.` });
+    load();
+  }
+
+  const byCurrency = {};
+  (rows || []).forEach((r) => {
+    (byCurrency[r.currency] = byCurrency[r.currency] || []).push(r);
+  });
+  const currencies = Object.keys(byCurrency);
+
+  return (
+    <div className="max-w-2xl space-y-5">
+      <button onClick={onBack} className="text-sm text-[var(--accent-text)] hover:brightness-110 flex items-center gap-1">
+        <ChevronLeft size={15} /> Back to Settings
+      </button>
+
+      <div className="flex items-center gap-3">
+        <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center shrink-0">
+          <Globe size={19} className="text-white" />
+        </div>
+        <div>
+          <h1 className="text-xl font-semibold text-[var(--text-primary)]">Pricing & currencies</h1>
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">Only visible to you — set up and switch on prices for other countries.</p>
+        </div>
+      </div>
+
+      <GlowCard>
+        <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+          Step 1: press <span className="font-medium text-[var(--text-primary)]">Create plans in Razorpay</span> for a currency. Step 2: press{" "}
+          <span className="font-medium text-[var(--text-primary)]">Show to customers</span>. Razorpay plans cannot be edited once created, so check the prices below before step 1.
+          Customers outside India, the US, Canada and the Euro countries see US dollars.
+        </p>
+      </GlowCard>
+
+      {message && (
+        <div className={"rounded-xl px-4 py-3 text-sm border " + (message.type === "ok" ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : "bg-red-500/10 border-red-500/30 text-red-400")}>
+          {message.text}
+        </div>
+      )}
+      {loadError && <p className="text-sm text-red-400">{loadError}</p>}
+      {rows === null && !loadError && <p className="text-sm text-[var(--text-muted)]">Loading…</p>}
+
+      {currencies.map((cur) => {
+        const list = byCurrency[cur];
+        const isLive = list.every((r) => r.active);
+        const subRows = list.filter((r) => r.plan !== "lifetime");
+        const plansReady = subRows.filter((r) => r.razorpay_plan_id).length;
+        const allPlansReady = plansReady === subRows.length;
+        const working = busy === cur;
+        return (
+          <GlowCard key={cur}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-base font-semibold text-[var(--text-primary)]">{cur === "INR" ? "India · INR" : cur}</p>
+              <span className={"text-xs font-medium px-2.5 py-1 rounded-full " + (isLive ? "bg-emerald-500/15 text-emerald-400" : "bg-[var(--surface-2)] text-[var(--text-muted)]")}>
+                {isLive ? "Showing to customers" : "Switched off"}
+              </span>
+            </div>
+
+            <div className="space-y-1.5 mb-4">
+              {list.map((r) => (
+                <div key={r.plan + r.billing_interval} className="flex items-center justify-between text-sm">
+                  <span className="text-[var(--text-secondary-strong)]">{PACK_LABELS[packKey(r)]}</span>
+                  <span className="flex items-center gap-3">
+                    <span className="font-medium text-[var(--text-primary)]">{formatMoney(r.amount_minor, cur)}</span>
+                    <span className={"text-[11px] w-24 text-right " + (r.plan === "lifetime" || r.razorpay_plan_id ? "text-emerald-400" : "text-amber-400")}>
+                      {r.plan === "lifetime" ? "one-time payment" : r.razorpay_plan_id ? "plan ready" : "plan not created"}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {cur === "INR" ? (
+              <p className="text-xs text-[var(--text-faint)]">Your current prices. Always on.</p>
+            ) : (
+              <div className="flex flex-col sm:flex-row gap-2">
+                {!allPlansReady && (
+                  <button
+                    onClick={() => createPlans(cur)}
+                    disabled={working}
+                    className="flex-1 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-50 text-white text-sm font-medium py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2"
+                  >
+                    {working && <Loader2 size={14} className="animate-spin" />}
+                    {working ? "Creating…" : `Create plans in Razorpay (${subRows.length - plansReady} missing)`}
+                  </button>
+                )}
+                {allPlansReady && !isLive && (
+                  <button
+                    onClick={() => setActive(cur, true)}
+                    disabled={working}
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-medium py-2.5 rounded-xl transition-colors"
+                  >
+                    {working ? "Working…" : "Show to customers"}
+                  </button>
+                )}
+                {isLive && (
+                  <button
+                    onClick={() => setActive(cur, false)}
+                    disabled={working}
+                    className="flex-1 border border-red-900/40 text-red-400 hover:bg-red-500/5 disabled:opacity-50 text-sm font-medium py-2.5 rounded-xl transition-colors"
+                  >
+                    {working ? "Working…" : "Switch off"}
+                  </button>
+                )}
+              </div>
+            )}
+          </GlowCard>
+        );
+      })}
     </div>
   );
 }
@@ -15334,6 +15746,7 @@ function Settings({ user, onLogout, theme, onSelectTheme, soundEnabled, onToggle
   const [showFeedbackAdmin, setShowFeedbackAdmin] = useState(initialView === "feedbackAdmin");
   const [showRefundAdmin, setShowRefundAdmin] = useState(initialView === "refundAdmin");
   const [showRevenueDashboard, setShowRevenueDashboard] = useState(initialView === "revenueDashboard");
+  const [showPricingAdmin, setShowPricingAdmin] = useState(initialView === "pricingAdmin");
   const [showAbout, setShowAbout] = useState(initialView === "about");
   const [showLegal, setShowLegal] = useState(initialView === "legal");
   const isAdmin = user?.email === "vashvinraj@gmail.com";
@@ -15383,6 +15796,9 @@ function Settings({ user, onLogout, theme, onSelectTheme, soundEnabled, onToggle
   }
   if (showRevenueDashboard) {
     return <RevenueDashboardPage onBack={() => setShowRevenueDashboard(false)} />;
+  }
+  if (showPricingAdmin) {
+    return <PricingAdminPage onBack={() => setShowPricingAdmin(false)} />;
   }
 
   const activeThemeInfo = THEMES.find((t) => t.key === theme) || THEMES[0];
@@ -15512,6 +15928,21 @@ function Settings({ user, onLogout, theme, onSelectTheme, soundEnabled, onToggle
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-[var(--text-primary)]">Revenue Dashboard (Admin)</p>
               <p className="text-xs text-[var(--text-muted)] mt-0.5">Only visible to you — payment history, revenue totals, and expenses</p>
+            </div>
+            <ChevronRight size={16} className="text-[var(--text-faint)] group-hover:text-[var(--accent-text)] group-hover:translate-x-0.5 transition-all shrink-0" />
+          </button>
+        </GlowCard>
+      )}
+
+      {isAdmin && (
+        <GlowCard>
+          <button onClick={() => setShowPricingAdmin(true)} className="w-full flex items-center gap-3 text-left group">
+            <div className="h-11 w-11 rounded-xl shrink-0 bg-amber-500/20 flex items-center justify-center">
+              <Globe size={18} className="text-amber-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-[var(--text-primary)]">Pricing & currencies (Admin)</p>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">Only visible to you — set up and switch on prices for other countries</p>
             </div>
             <ChevronRight size={16} className="text-[var(--text-faint)] group-hover:text-[var(--accent-text)] group-hover:translate-x-0.5 transition-all shrink-0" />
           </button>
