@@ -443,11 +443,12 @@ function localDateStr(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-// How tall the bolt is relative to the wordmark's font size. 1.5 makes it
+// How tall the bolt is relative to the wordmark's font size. 1.35 makes it
 // clearly taller than the text (cap-top to descender) in every place the logo
 // appears, since the size always scales from the same text size. Change this
 // one number to make the bolt bigger or smaller everywhere at once.
-const LOGO_BOLT_RATIO = 1.5;
+// (Tuned for the wide bolt. The older tall, narrow bolt needed 1.5.)
+const LOGO_BOLT_RATIO = 1.35;
 
 function Logo({ size = 28 }) {
   // `size` is the wordmark's font size in px. logo-mark.png is tightly
