@@ -1478,12 +1478,13 @@ function formatSessionTime(dateStr) {
 
 /* ---------------------------- Dashboard ---------------------------- */
 
-function Dashboard({ user, goTo, refreshKey, goToAbout }) {
+function Dashboard({ user, goTo, refreshKey, goToAbout, goToStore }) {
   const [sessions, setSessions] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [frozenDates, setFrozenDates] = useState([]);
   const [restoreStatus, setRestoreStatus] = useState(null); // { eligible, used, max, remaining }
+  const [chargeWallet, setChargeWallet] = useState(null); // { l1_bal, l2_bal, l3_bal, bonus_restores }
   const [confirmingRestore, setConfirmingRestore] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [restoreMessage, setRestoreMessage] = useState("");
@@ -1541,6 +1542,8 @@ function Dashboard({ user, goTo, refreshKey, goToAbout }) {
     setFrozenDates((freezes || []).map((f) => f.freeze_date));
     const { data: status } = await supabase.rpc("get_my_streak_restore_status");
     setRestoreStatus(status || { eligible: false, used: 0, max: 0, remaining: 0 });
+    const { data: wallet } = await supabase.from("charge_wallet").select("l1_bal, l2_bal, l3_bal, bonus_restores").maybeSingle();
+    setChargeWallet(wallet || { l1_bal: 0, l2_bal: 0, l3_bal: 0, bonus_restores: 0 });
   }
 
   async function handleRestoreStreak(missedDateStr) {
@@ -1549,10 +1552,10 @@ function Dashboard({ user, goTo, refreshKey, goToAbout }) {
     setRestoring(false);
     setConfirmingRestore(false);
     if (error) {
-      setRestoreMessage((error.message || "").includes("STREAK_RESTORE_LIMIT") ? "You've used all your streak restores for this year." : "Couldn't restore your streak — please try again.");
+      setRestoreMessage((error.message || "").includes("STREAK_RESTORE_LIMIT") ? "You've used all your streak restores for this year." : (error.message || "").includes("STREAK_RESTORE_NOT_ELIGIBLE") ? "You don't have a streak restore available — earn charge and get one in Settings → Charge store." : "Couldn't restore your streak — please try again.");
       return;
     }
-    setRestoreMessage(`Streak restored — ${data.remaining} of ${data.max} restores left this year.`);
+    setRestoreMessage(`Streak restored — ${data.remaining} restore${data.remaining === 1 ? "" : "s"} left.`);
     loadStreakData();
     loadSessions();
   }
@@ -1632,11 +1635,11 @@ function Dashboard({ user, goTo, refreshKey, goToAbout }) {
         >
           <div className="flex items-center gap-3">
             <Flame size={18} className="text-orange-400 shrink-0" />
-            <p className="text-sm text-orange-400">Your streak broke yesterday — restore it with your Yearly Pro benefit.</p>
+            <p className="text-sm text-orange-400">Your streak broke yesterday — restore it with a streak restore.</p>
           </div>
           {confirmingRestore ? (
             <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs text-orange-300">{restoreStatus.remaining} of {restoreStatus.max} left</span>
+              <span className="text-xs text-orange-300">{restoreStatus.remaining} restore{restoreStatus.remaining === 1 ? "" : "s"} left</span>
               <button
                 onClick={() => handleRestoreStreak(yesterdayStr)}
                 disabled={restoring}
@@ -1732,6 +1735,14 @@ function Dashboard({ user, goTo, refreshKey, goToAbout }) {
           </p>
           <p className="text-2xl font-semibold text-[var(--text-primary)]">{loading ? "…" : stats.streak}</p>
           <p className="text-xs text-[var(--text-muted)] mt-1">Day Streak</p>
+          {user && restoreStatus && chargeWallet && (() => {
+            const totalRestores = (restoreStatus.eligible ? restoreStatus.remaining || 0 : 0) + (chargeWallet.bonus_restores || 0);
+            return (
+              <p className={"text-[11px] mt-1 " + (totalRestores > 0 ? "text-emerald-400" : "text-[var(--text-faint)]")}>
+                {totalRestores} restore{totalRestores === 1 ? "" : "s"} available
+              </p>
+            );
+          })()}
         </GlowCard>
         <GlowCard>
           <p className="text-xs text-[var(--text-muted)] mb-1">Sessions</p>
@@ -1785,6 +1796,27 @@ function Dashboard({ user, goTo, refreshKey, goToAbout }) {
         )}
       </div>
 
+      {user && chargeWallet && (
+        <button
+          onClick={() => goToStore && goToStore()}
+          className="group w-full flex items-center gap-4 rounded-2xl bg-[var(--surface-solid)] border border-[rgb(var(--accent-rgb)/0.2)] hover:border-[rgb(var(--accent-rgb)/0.4)] p-4 text-left transition-colors"
+        >
+          <span className="h-11 w-11 rounded-xl bg-[rgb(var(--accent-rgb)/0.15)] flex items-center justify-center shrink-0">
+            <Zap size={22} className="text-[var(--accent-text)]" fill="currentColor" />
+          </span>
+          <span className="flex-1 min-w-0">
+            <span className="block text-[var(--text-primary)] font-semibold">
+              Charge bolts
+              {chargeWallet.bonus_restores > 0 && <span className="ml-2 text-xs font-medium text-emerald-400">{chargeWallet.bonus_restores} streak restore{chargeWallet.bonus_restores === 1 ? "" : "s"} ready</span>}
+            </span>
+            <span className="block text-xs text-[var(--text-muted)] mt-0.5">
+              Level 1 ×{chargeWallet.l1_bal} · Level 2 ×{chargeWallet.l2_bal} · Level 3 ×{chargeWallet.l3_bal} — finish timed Focus Timer sessions to earn more
+            </span>
+          </span>
+          <span className="text-xs text-[var(--accent-text)] shrink-0 flex items-center gap-0.5">Store <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" /></span>
+        </button>
+      )}
+
       <GlowCard>
         <div className="flex items-center justify-between mb-3">
           <p className="text-[var(--text-primary)] font-medium text-sm">This week</p>
@@ -1812,6 +1844,57 @@ function Dashboard({ user, goTo, refreshKey, goToAbout }) {
 const DEFAULT_POMODORO = { focus: 25, short: 5, long: 15 };
 
 /* Small reusable success toast — fades and slides in, then fades out. */
+/* ---------------- Ads for Free users (Google AdSense) ----------------
+   Fill these in once AdSense approves your site. While ADSENSE_CLIENT is empty,
+   nothing is loaded and no empty boxes show, so it is safe to ship as is.
+     ADSENSE_CLIENT : your publisher id, e.g. "ca-pub-1234567890123456"
+     ADSENSE_SLOTS  : the ad-unit id for each spot (AdSense -> Ads -> By ad unit)
+   Ads only ever run for Free users and guests; Basic, Pro and Lifetime never load them. */
+const ADSENSE_CLIENT = "ca-pub-5978595549678449";
+const ADSENSE_SLOTS = { tasks: "", stats: "" };
+
+function useAdSenseScript(enabled) {
+  useEffect(() => {
+    if (!enabled || !ADSENSE_CLIENT) return;
+    if (document.getElementById("adsense-script")) return;
+    const el = document.createElement("script");
+    el.id = "adsense-script";
+    el.async = true;
+    el.crossOrigin = "anonymous";
+    el.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}`;
+    document.head.appendChild(el);
+  }, [enabled]);
+}
+
+function AdBanner({ slotKey, onRemoveAds }) {
+  const slot = ADSENSE_SLOTS[slotKey];
+  const ready = !!ADSENSE_CLIENT && !!slot;
+  useEffect(() => {
+    if (!ready) return;
+    try {
+      (window.adsbygoogle = window.adsbygoogle || []).push({});
+    } catch (e) {
+      console.error("Ad failed to load:", e);
+    }
+  }, [ready]);
+  if (!ready) return null;
+  return (
+    <div className="max-w-4xl mx-auto mt-8 mb-2">
+      <div className="flex items-center justify-between mb-1 px-1">
+        <span className="text-[10px] uppercase tracking-wide text-[var(--text-faint)]">Advertisement</span>
+        {onRemoveAds && (
+          <button onClick={onRemoveAds} className="text-[11px] text-[var(--accent-text)] hover:underline">
+            Remove ads
+          </button>
+        )}
+      </div>
+      <div className="rounded-xl overflow-hidden bg-[var(--surface-solid)] border border-[var(--border-subtle)] min-h-[90px]">
+        <ins className="adsbygoogle" style={{ display: "block" }} data-ad-client={ADSENSE_CLIENT} data-ad-slot={slot} data-ad-format="auto" data-full-width-responsive="true" />
+      </div>
+    </div>
+  );
+}
+
 function ErrorToast({ message }) {
   const [visible, setVisible] = useState(false);
   const [leaving, setLeaving] = useState(false);
@@ -1834,14 +1917,14 @@ function ErrorToast({ message }) {
   return (
     <div
       className={
-        "fixed z-[200] bottom-24 md:bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 text-sm text-red-400 bg-[var(--surface-solid)] border border-red-500/30 rounded-xl px-4 py-2.5 shadow-xl shadow-black/30 transition-all duration-300 max-w-[90vw] " +
+        "fixed z-[200] bottom-24 md:bottom-8 left-1/2 md:left-[calc(50%+7.5rem)] lg:left-[calc(50%+8rem)] -translate-x-1/2 flex items-center gap-2 text-sm text-red-400 bg-[var(--surface-solid)] border border-red-500/30 rounded-xl px-4 py-2.5 shadow-xl shadow-black/30 transition-all duration-300 w-max max-w-[calc(100vw-2rem)] md:max-w-xl " +
         (visible && !leaving ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2")
       }
     >
       <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-500/20">
         <X size={11} className="text-red-400" />
       </span>
-      <span>{message}</span>
+      <span className="min-w-0 break-words">{message}</span>
     </div>
   );
 }
@@ -1868,14 +1951,14 @@ function SavedToast({ message }) {
   return (
     <div
       className={
-        "fixed z-[200] bottom-24 md:bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 text-sm text-emerald-400 bg-[var(--surface-solid)] border border-emerald-500/30 rounded-xl px-4 py-2.5 shadow-xl shadow-black/30 transition-all duration-300 " +
+        "fixed z-[200] bottom-24 md:bottom-8 left-1/2 md:left-[calc(50%+7.5rem)] lg:left-[calc(50%+8rem)] -translate-x-1/2 flex items-center gap-2 text-sm text-emerald-400 bg-[var(--surface-solid)] border border-emerald-500/30 rounded-xl px-4 py-2.5 shadow-xl shadow-black/30 transition-all duration-300 w-max max-w-[calc(100vw-2rem)] md:max-w-xl " +
         (visible && !leaving ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2")
       }
     >
       <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/20">
         <Check size={11} className="text-emerald-400" />
       </span>
-      <span className="whitespace-nowrap">{message}</span>
+      <span className="min-w-0 break-words">{message}</span>
     </div>
   );
 }
@@ -2468,6 +2551,17 @@ function StopwatchMode({ onSave, onRunningChange }) {
 
 /* ---------- Focus Timer (no auto break) ---------- */
 
+/* ---------- Charge bolts: finishing a full timed Focus Timer session earns charge.
+   Level 1: 15-89 min, Level 2: 90-179 min, Level 3: 3h+. Each level is its own bolt.
+   Bolts are spent in the Settings store (streak restores, XP packs). The server awards them. ---------- */
+const CHARGE_LEVEL_LABELS = { 1: "Level 1", 2: "Level 2", 3: "Level 3" };
+function chargeLevelForMinutes(min) {
+  if (min >= 180) return 3;
+  if (min >= 90) return 2;
+  if (min >= 15) return 1;
+  return 0;
+}
+
 function FocusTimerMode({ onSave, onRunningChange }) {
   const { requireAuth } = useRequireAuth();
   const [configured, setConfigured] = useState(false);
@@ -2483,6 +2577,19 @@ function FocusTimerMode({ onSave, onRunningChange }) {
   const [justCompleted, setJustCompleted] = useState(false);
   const [completePopIn, setCompletePopIn] = useState(false);
   const intervalRef = useRef(null);
+  const [chargeEarned, setChargeEarned] = useState(null); // { level } once a full session is saved
+  const [bonusEarned, setBonusEarned] = useState(null); // { xp, pct } level-bonus XP from this session
+  const [levelBonus, setLevelBonus] = useState(null); // { level, pct } shown on the setup screen
+  useEffect(() => {
+    if (configured) return;
+    let cancelled = false;
+    supabase.rpc("get_my_focus_bonus").then(({ data }) => {
+      if (!cancelled && data) setLevelBonus(data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [configured]);
 
   useEffect(() => {
     if (running) {
@@ -2527,6 +2634,8 @@ function FocusTimerMode({ onSave, onRunningChange }) {
 
   // Fully resets back to the setup screen, ready to start a brand-new timer.
   const backToSetup = () => {
+    setChargeEarned(null);
+    setBonusEarned(null);
     setConfigured(false);
     setRunning(false);
     setJustCompleted(false);
@@ -2575,6 +2684,19 @@ function FocusTimerMode({ onSave, onRunningChange }) {
     setSaving(true);
     const ok = await onSave("focus", durationMin * 60, focusedSoFar, startedAt || new Date().toISOString());
     setSaving(false);
+    let earned = null;
+    let bonus = null;
+    if (ok && startedAt) {
+      // The server decides what was awarded (bolt level, bonus XP, daily limits).
+      const [{ data: award }, { data: bonusRow }] = await Promise.all([
+        isComplete ? supabase.from("charge_awards").select("level").eq("started_at", startedAt).maybeSingle() : Promise.resolve({ data: null }),
+        supabase.from("charge_xp_ledger").select("xp, pct").eq("source", "focus_bonus").eq("started_at", startedAt).maybeSingle(),
+      ]);
+      if (award) earned = award;
+      if (bonusRow) bonus = bonusRow;
+    }
+    setChargeEarned(earned);
+    setBonusEarned(bonus);
     if (ok) {
       if (!isComplete) playCompletionSound(); // isComplete already played its own sound above
       setSavedSeconds(focusedSoFar);
@@ -2588,7 +2710,7 @@ function FocusTimerMode({ onSave, onRunningChange }) {
           backToSetup();
           requestAnimationFrame(() => setViewFading(false));
         }, 150);
-      }, 400);
+      }, earned || bonus ? 2600 : 400);
     }
   };
 
@@ -2626,6 +2748,18 @@ function FocusTimerMode({ onSave, onRunningChange }) {
           <h2 className="text-[var(--text-primary)] font-medium mb-1">Set your focus duration</h2>
           <p className="text-xs text-[var(--text-muted)] mb-5">Runs continuously with no automatic breaks.</p>
           <DurationPicker value={draftMin} onChange={setDraftMin} presets={[15, 25, 45, 60, 90, 120]} max={300} />
+          {chargeLevelForMinutes(draftMin) > 0 ? (
+            <p className="text-xs text-[var(--accent-text)] mt-4 text-center flex items-center justify-center gap-1">
+              <Zap size={12} /> Finish the full timer to earn a Level {chargeLevelForMinutes(draftMin)} charge bolt
+            </p>
+          ) : (
+            <p className="text-xs text-[var(--text-faint)] mt-4 text-center">Sessions of 15 min or more earn a charge bolt when you finish them.</p>
+          )}
+          {levelBonus && (
+            <p className="text-[11px] text-[var(--text-muted)] mt-1.5 text-center">
+              {levelBonus.pct > 0 ? `Your level ${levelBonus.level} bonus: +${levelBonus.pct}% XP on Focus Timer sessions` : "Level up to earn bonus XP on Focus Timer sessions (up to +30%)"}
+            </p>
+          )}
           <button onClick={() => requireAuth(begin)} className="w-full mt-6 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-[var(--text-primary)] font-medium py-3 rounded-xl transition-all duration-200 active:scale-[0.98]">
             Start Focus Timer
           </button>
@@ -2673,6 +2807,9 @@ function FocusTimerMode({ onSave, onRunningChange }) {
               </span>
               <span className="text-xl font-semibold text-[var(--text-primary)]">Session complete!</span>
               <span className="text-xs text-[var(--text-muted)] mt-1 uppercase tracking-wide">{formatMinutesLong(durationMin)} focused</span>
+              {chargeLevelForMinutes(durationMin) > 0 && (
+                <span className="text-xs text-[var(--accent-text)] mt-2 flex items-center gap-1"><Zap size={12} /> Save to claim your Level {chargeLevelForMinutes(durationMin)} charge</span>
+              )}
             </div>
           ) : (
             <>
@@ -2701,6 +2838,12 @@ function FocusTimerMode({ onSave, onRunningChange }) {
             <Check size={13} />
           </span>
           Saved! {formatDuration(savedSeconds)} added
+          {chargeEarned && (
+            <span className="flex items-center gap-1 text-[var(--accent-text)]"><Zap size={13} /> Level {chargeEarned.level} bolt earned</span>
+          )}
+          {bonusEarned && (
+            <span className="text-[var(--accent-text)]">+{bonusEarned.xp.toLocaleString()} bonus XP ({bonusEarned.pct}%)</span>
+          )}
         </div>
       ) : (
         focusedSoFar > 0 && <SaveButton onClick={save} saving={saving} label="Save Session" />
@@ -8678,14 +8821,22 @@ function AvatarCropModal({ file, onCancel, onSave }) {
 
 // Avatar picker — built-in gallery of illustrated avatars, or upload your own
 // (which opens the crop tool above before saving).
-function AvatarPickerModal({ onSelectBuiltin, onUploadCropped, onClose }) {
+function AvatarPickerModal({ onSelectBuiltin, onUploadCropped, onClose, userLevel = 1, isPremium = false }) {
   const [cropFile, setCropFile] = useState(null);
   const [avatars, setAvatars] = useState(null); // null = still loading the asset chunk
+  const [levelAvatars, setLevelAvatars] = useState(null); // level-unlockable profile pictures
   const fileInputRef = useRef(null);
 
   useEffect(() => {
     import("./characterAssets").then((mod) => setAvatars(mod.BUILTIN_AVATARS));
-  }, []);
+    // The level-unlock profile pictures are a Pro / Yearly / Lifetime perk —
+    // everyone else only sees the built-in avatars and the upload option.
+    if (isPremium) {
+      import("./profileAvatars")
+        .then((mod) => setLevelAvatars(mod.PROFILE_AVATARS))
+        .catch(() => setLevelAvatars([]));
+    }
+  }, [isPremium]);
 
   const handleFileChange = (e) => {
     const file = e.target.files && e.target.files[0];
@@ -8731,6 +8882,43 @@ function AvatarPickerModal({ onSelectBuiltin, onUploadCropped, onClose }) {
           <ImageIcon size={15} /> Upload from your device
         </button>
         <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+
+        {isPremium && levelAvatars && levelAvatars.length > 0 && (
+          <>
+            <p className="text-xs text-[var(--text-muted)] mb-2">Level profiles — unlock more as you level up</p>
+            <div className="grid grid-cols-4 gap-2 mb-4">
+              {levelAvatars.map((p) => {
+                const unlocked = userLevel >= p.unlockLevel;
+                if (!unlocked && p.secret) {
+                  // Secret tier: no image, no level hint — just a mystery tile.
+                  return (
+                    <div key={p.id} className="relative rounded-full overflow-hidden border-2 border-transparent aspect-square bg-[var(--surface)] flex items-center justify-center" aria-label="Locked profile">
+                      <Lock size={16} className="text-[var(--text-muted)]" />
+                    </div>
+                  );
+                }
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    disabled={!unlocked}
+                    onClick={() => unlocked && onSelectBuiltin(p.src)}
+                    className={`relative rounded-full overflow-hidden border-2 border-transparent aspect-square transition-colors ${unlocked ? "hover:border-[var(--accent)]" : "cursor-not-allowed"}`}
+                    aria-label={unlocked ? `Profile ${p.id}` : `Profile ${p.id}, unlocks at level ${p.unlockLevel}`}
+                  >
+                    <img src={p.src} alt={`Profile ${p.id}`} className={`w-full h-full object-cover ${unlocked ? "" : "grayscale opacity-40"}`} />
+                    {!unlocked && (
+                      <span className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 text-white">
+                        <Lock size={13} />
+                        <span className="text-[10px] font-semibold leading-tight mt-0.5">Lv {p.unlockLevel}</span>
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
 
         <p className="text-xs text-[var(--text-muted)] mb-2">Or pick a built-in avatar</p>
         {!avatars ? (
@@ -9072,7 +9260,7 @@ function Profile({ refreshKey, onProfileReady, goToAccountSettings }) {
             </div>
           </GlowCard>
 
-          {showAvatarPicker && <AvatarPickerModal onSelectBuiltin={selectBuiltinAvatar} onUploadCropped={uploadCustomAvatar} onClose={() => setShowAvatarPicker(false)} />}
+          {showAvatarPicker && <AvatarPickerModal userLevel={current.level} isPremium={profile.premium_tier === "premium"} onSelectBuiltin={selectBuiltinAvatar} onUploadCropped={uploadCustomAvatar} onClose={() => setShowAvatarPicker(false)} />}
 
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {[
@@ -11938,8 +12126,11 @@ function Pricing({ goToLegal }) {
   const [subStatus, setSubStatus] = useState(null); // { plan, billing_interval, status, current_period_end, cancelled_at, will_renew } | null
   const [subActionLoading, setSubActionLoading] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  // First-month intro price: { basic: bool, premium: bool } — true means this account has never paid for that plan.
+  const [introElig, setIntroElig] = useState({ basic: true, premium: true });
 
   useEffect(() => {
+    supabase.rpc("get_my_intro_eligibility").then(({ data }) => { if (data) setIntroElig({ basic: data.basic !== false, premium: data.premium !== false }); });
     supabase.rpc("get_my_subscription_status").then(({ data }) => setSubStatus(data));
     supabase.rpc("get_pricing_config").then(({ data }) => setPricingConfig(data || {}));
     loadRazorpayScript(); // preload now, so it's already ready by the time someone clicks Upgrade
@@ -12124,20 +12315,26 @@ function Pricing({ goToLegal }) {
   const proYearlySavingsPct = Math.round((1 - proYearlyMinor / proYearlyReferenceMinor) * 100); // never shown with a decimal
 
   const isYearly = proBilling === "yearly";
+  // First-month intro price (monthly, rupees only; yearly and lifetime are unchanged). The server re-checks eligibility at checkout.
+  const INTRO_BASIC_MINOR = 5900;
+  const INTRO_PRO_MINOR = 14900;
+  const hasLiveSub = !!subStatus && (subStatus.is_lifetime || subStatus.status === "active" || subStatus.status === "past_due"); // plan changes go through a different route, no intro price there
+  const showBasicIntro = currency === "INR" && introElig.basic && !hasLiveSub;
+  const showProIntro = currency === "INR" && introElig.premium && !isYearly && !hasLiveSub;
 
   const plans = [
     { key: "free", label: "Free", positioning: "Try Lytning Focus", price: money(0), usdEq: dollarNote(0), period: "/ forever", features: PRICING_FREE_FEATURES, icon: null, headerLabel: "Includes" },
-    { key: "basic", label: "Basic", positioning: "For regular students", tagline: "Student Pack", price: money(basicMonthlyMinor), usdEq: dollarNote(basicMonthlyMinor), period: "/ month", features: PRICING_BASIC_FEATURES, icon: Sparkles, headerLabel: "Everything in Free, plus", cta: "Upgrade to Basic" },
+    { key: "basic", label: "Basic", positioning: "For regular students", tagline: "Student Pack", price: showBasicIntro ? money(INTRO_BASIC_MINOR) : money(basicMonthlyMinor), usdEq: showBasicIntro ? dollarNote(INTRO_BASIC_MINOR) : dollarNote(basicMonthlyMinor), period: showBasicIntro ? "/ first month with UPI" : "/ month", strikePrice: showBasicIntro ? money(basicMonthlyMinor) : undefined, sub: showBasicIntro ? `UPI offer, first month only \u2014 then ${money(basicMonthlyMinor)}/month` : undefined, features: PRICING_BASIC_FEATURES, icon: Sparkles, headerLabel: "Everything in Free, plus", cta: "Upgrade to Basic" },
     {
       key: "pro",
       label: "Pro",
       positioning: isYearly ? "Best value for committed students" : "For serious daily study",
       tagline: "Full Access",
-      price: isYearly ? money(proYearlyMinor) : money(proMonthlyMinor),
-      usdEq: isYearly ? dollarNote(proYearlyMinor) : dollarNote(proMonthlyMinor),
-      strikePrice: isYearly ? money(proYearlyReferenceMinor) : undefined,
-      period: isYearly ? "/ year" : "/ month",
-      sub: isYearly ? `\u2248 ${money(proYearlyEquivalentMonthlyMinor)}/month \u2014 save ${proYearlySavingsPct}%` : undefined,
+      price: isYearly ? money(proYearlyMinor) : showProIntro ? money(INTRO_PRO_MINOR) : money(proMonthlyMinor),
+      usdEq: isYearly ? dollarNote(proYearlyMinor) : showProIntro ? dollarNote(INTRO_PRO_MINOR) : dollarNote(proMonthlyMinor),
+      strikePrice: isYearly ? money(proYearlyReferenceMinor) : showProIntro ? money(proMonthlyMinor) : undefined,
+      period: isYearly ? "/ year" : showProIntro ? "/ first month with UPI" : "/ month",
+      sub: isYearly ? `\u2248 ${money(proYearlyEquivalentMonthlyMinor)}/month \u2014 save ${proYearlySavingsPct}%` : showProIntro ? `UPI offer, first month only \u2014 then ${money(proMonthlyMinor)}/month` : undefined,
       features: isYearly ? PRICING_YEARLY_FEATURES : PRICING_PREMIUM_FEATURES,
       icon: Crown,
       highlight: true,
@@ -12213,7 +12410,8 @@ function Pricing({ goToLegal }) {
 
       <div className="grid sm:grid-cols-3 gap-4">
         {plans.map((plan) => {
-          const isCurrent = plan.key === myTier || (plan.key === "pro" && myTier === "premium" && proBilling === myBillingInterval);
+          const isLifetimeUser = !!subStatus?.is_lifetime;
+          const isCurrent = !isLifetimeUser && (plan.key === myTier || (plan.key === "pro" && myTier === "premium" && proBilling === myBillingInterval));
           return (
           <GlowCard
             key={plan.key}
@@ -12347,9 +12545,14 @@ function Pricing({ goToLegal }) {
         </div>
         <GlowCard
           glow
-          borderColor="rgb(var(--accent-rgb) / 0.7)"
-          className="!p-6 sm:!p-8 bg-gradient-to-r from-[rgb(var(--accent-rgb)/0.18)] via-[rgb(var(--accent-rgb)/0.08)] to-transparent shadow-[0_0_50px_-10px_rgb(var(--accent-rgb)/0.5)]"
+          borderColor={subStatus?.is_lifetime ? "rgb(52 211 153 / 0.6)" : "rgb(var(--accent-rgb) / 0.7)"}
+          className="relative !p-6 sm:!p-8 bg-gradient-to-r from-[rgb(var(--accent-rgb)/0.18)] via-[rgb(var(--accent-rgb)/0.08)] to-transparent shadow-[0_0_50px_-10px_rgb(var(--accent-rgb)/0.5)]"
         >
+          {subStatus?.is_lifetime && (
+            <span className="absolute -top-2.5 left-4 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500 text-white whitespace-nowrap">
+              YOUR PLAN
+            </span>
+          )}
           <div className="flex flex-col sm:flex-row items-center gap-6">
             <div className="flex-1 text-center sm:text-left">
               <div className="flex items-center justify-center sm:justify-start gap-2 mb-1">
@@ -14054,7 +14257,14 @@ const ABOUT_TOPICS = [
     emoji: "\ud83d\udd25",
     title: "Streaks & Streak Restore",
     content:
-      "Study at least once a day and your streak keeps climbing. Miss a day, it resets \u2014 ouch \ud83d\ude2c But if you're on Yearly Pro specifically (not the monthly plan), you get 6 Streak Restores a year to save yourself if you slip up, as long as you catch it in time. We'll even warn you about 2 hours before a streak's about to break if you haven't studied yet that day.",
+      "Study at least once a day and your streak keeps climbing. Miss a day, it resets \u2014 ouch \ud83d\ude2c But if you're on Yearly Pro specifically (not the monthly plan), you get 6 Streak Restores a year to save yourself if you slip up, as long as you catch it in time. Everyone else can earn up to 3 a year with charge bolts too (see Charge Bolts & the Store). We'll even warn you about 2 hours before a streak's about to break if you haven't studied yet that day.",
+  },
+  {
+    icon: Zap,
+    emoji: "\u26a1",
+    title: "Charge Bolts & the Store",
+    content:
+      "Finish a full timed Focus Timer session (stopping early doesn't count) and you earn a charge bolt ⚡. A session of 15 min to 1 h 29 min gives a Level 1 bolt, 1 h 30 min to 2 h 59 min gives Level 2, and 3 hours or more gives Level 3. Spend them in Settings → Charge store, using bolts of one level at a time: a streak restore costs 120 Level 1, 30 Level 2 or 20 Level 3 bolts (a pack of 3 is 10% off: 324, 81 or 54), and XP packs run from +3,600 up to +20,400 XP. You can buy up to 3 streak restores a year with bolts, and there's a daily limit on how many bolts you can earn, so it stays fair. Bonus: Focus Timer sessions also give extra XP that grows with your level — 0% at the start, up to +30% by level 200.",
   },
   {
     icon: Users,
@@ -15643,7 +15853,7 @@ function AccountSettingsPage({ onBack, onLogout }) {
 // knows a share was INITIATED — no website can know which app someone
 // picked in a native share sheet, or how many people they actually sent it
 // to afterward; that information never leaves the OS/target app.
-const SHARE_URL = "https://studyflow.app"; // update to your real deployed URL
+const SHARE_URL = "https://lytningfocus.com";
 const SHARE_TEXT = "I've been using Lytning Focus to stay focused and build better study habits — thought you might like it too.";
 
 function ShareCard() {
@@ -15751,6 +15961,186 @@ function ShareCard() {
   );
 }
 
+// The charge store — where charge bolts earned from full timed Focus Timer
+// sessions get spent. Prices come from the server (charge_catalog) and the
+// purchase itself is checked and spent on the server, never just here.
+function ChargeStorePage({ onBack }) {
+  const [wallet, setWallet] = useState(null);
+  const [catalog, setCatalog] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [busyKey, setBusyKey] = useState(null);
+  const [pendingKey, setPendingKey] = useState(null); // first tap arms a purchase, second tap confirms
+  const [message, setMessage] = useState(null); // { kind: "ok" | "err", text }
+
+  async function loadAll() {
+    const [{ data: w }, { data: c }] = await Promise.all([
+      supabase.from("charge_wallet").select("l1_bal, l2_bal, l3_bal, bonus_restores, restores_bought_year, restores_bought").maybeSingle(),
+      supabase.rpc("charge_catalog"),
+    ]);
+    setWallet(w || { l1_bal: 0, l2_bal: 0, l3_bal: 0, bonus_restores: 0, restores_bought_year: 0, restores_bought: 0 });
+    setCatalog(c || null);
+    setLoading(false);
+  }
+  useEffect(() => {
+    loadAll();
+  }, []);
+
+  const balanceOf = (level) => (wallet ? wallet[`l${level}_bal`] || 0 : 0);
+  const restoreLimit = catalog?.restore_year_limit ?? 3;
+  const boughtThisYear = wallet && wallet.restores_bought_year === new Date().getUTCFullYear() ? wallet.restores_bought || 0 : 0;
+
+  async function purchase(key, rpcName, args, successText) {
+    if (pendingKey !== key) {
+      setPendingKey(key);
+      setMessage(null);
+      setTimeout(() => setPendingKey((k) => (k === key ? null : k)), 4000);
+      return;
+    }
+    setPendingKey(null);
+    setBusyKey(key);
+    const { data, error } = await supabase.rpc(rpcName, args);
+    setBusyKey(null);
+    if (error) {
+      const m = error.message || "";
+      setMessage({
+        kind: "err",
+        text: m.includes("RESTORE_YEAR_LIMIT")
+          ? `You've reached this year's limit of ${catalog?.restore_year_limit ?? 3} streak restores bought with bolts.`
+          : m.includes("NOT_ENOUGH_CHARGE")
+          ? "Not enough bolts of that level."
+          : "Couldn't complete the purchase — please try again.",
+      });
+      loadAll();
+      return;
+    }
+    setMessage({ kind: "ok", text: typeof successText === "function" ? successText(data) : successText });
+    setWallet((w) => ({
+      ...(w || {}),
+      l1_bal: data.l1_bal, l2_bal: data.l2_bal, l3_bal: data.l3_bal, bonus_restores: data.bonus_restores,
+      restores_bought_year: data.restores_bought_year ?? w?.restores_bought_year,
+      restores_bought: data.restores_bought ?? w?.restores_bought,
+    }));
+  }
+
+  const BuyButton = ({ k, cost, level, onBuy, count = 0 }) => {
+    // count = how many streak restores this purchase adds (0 for XP packs)
+    const enough = balanceOf(level) >= cost && boughtThisYear + count <= restoreLimit;
+    const armed = pendingKey === k;
+    return (
+      <button
+        onClick={onBuy}
+        disabled={!enough || busyKey !== null}
+        className={"shrink-0 flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed " + (armed ? "bg-emerald-500 hover:bg-emerald-400 text-white" : "bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white")}
+      >
+        {busyKey === k ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} fill="currentColor" />}
+        {armed ? "Confirm" : `${cost} bolts`}
+      </button>
+    );
+  };
+
+  return (
+    <div className="max-w-xl space-y-5">
+      <button onClick={onBack} className="flex items-center gap-1 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
+        <ChevronLeft size={16} /> Back
+      </button>
+      <div className="flex items-center gap-3">
+        <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] flex items-center justify-center shrink-0">
+          <Zap size={19} className="text-white" fill="currentColor" />
+        </div>
+        <h1 className="text-xl font-semibold text-[var(--text-primary)]">Charge store</h1>
+      </div>
+
+      {loading ? (
+        <div className="py-10 flex justify-center"><Loader2 size={20} className="text-[var(--accent-text)] animate-spin" /></div>
+      ) : !catalog ? (
+        <GlowCard><p className="text-sm text-red-400">The store couldn't load. Please try again in a moment.</p></GlowCard>
+      ) : (
+        <>
+          <GlowCard glow>
+            <p className="text-xs text-[var(--text-muted)] mb-3">Your bolts</p>
+            <div className="grid grid-cols-3 gap-3">
+              {[1, 2, 3].map((lvl) => (
+                <div key={lvl} className="bg-[var(--surface-2)] rounded-xl py-3 text-center">
+                  <Zap size={18} className="mx-auto text-[var(--accent-text)]" fill="currentColor" />
+                  <p className="text-2xl font-semibold text-[var(--text-primary)] mt-1">{balanceOf(lvl)}</p>
+                  <p className="text-[11px] text-[var(--text-muted)]">{CHARGE_LEVEL_LABELS[lvl]}</p>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-[var(--text-muted)] mt-3">
+              Streak restores ready: <span className="text-emerald-400 font-medium">{wallet.bonus_restores}</span> — use one from the Dashboard when a streak breaks.
+            </p>
+            <p className="text-xs text-[var(--text-faint)] mt-1">
+              Restores bought with bolts this year: {boughtThisYear} / {restoreLimit}
+            </p>
+          </GlowCard>
+
+          {message && (
+            <p className={"text-sm px-1 " + (message.kind === "ok" ? "text-emerald-400" : "text-red-400")}>{message.text}</p>
+          )}
+
+          {[1, 2, 3].map((lvl) => {
+            const r = catalog.restore[String(lvl)];
+            const packs = catalog.xp[String(lvl)] || [];
+            return (
+              <GlowCard key={lvl}>
+                <p className="text-sm font-medium text-[var(--text-primary)] mb-3 flex items-center gap-1.5">
+                  <Zap size={14} className="text-[var(--accent-text)]" fill="currentColor" /> Spend {CHARGE_LEVEL_LABELS[lvl]} bolts
+                  <span className="text-xs text-[var(--text-muted)] font-normal ml-1">(you have {balanceOf(lvl)})</span>
+                </p>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3 bg-[var(--surface-2)] rounded-lg px-3 py-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-[var(--text-primary)]">1 streak restore</p>
+                    </div>
+                    <BuyButton k={`r1-${lvl}`} cost={r.single} level={lvl} count={1} onBuy={() => purchase(`r1-${lvl}`, "buy_streak_restores", { p_level: lvl, p_pack: 1 }, "Streak restore bought! Use it from the Dashboard if your streak breaks.")} />
+                  </div>
+                  <div className="flex items-center gap-3 bg-[var(--surface-2)] rounded-lg px-3 py-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-[var(--text-primary)] flex items-center gap-2">
+                        3 streak restores
+                        <span className="text-[10px] font-semibold uppercase bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded">{catalog.pack_discount_pct}% off</span>
+                      </p>
+                      <p className="text-[11px] text-[var(--text-faint)] line-through">{r.single * 3} bolts</p>
+                    </div>
+                    <BuyButton k={`r3-${lvl}`} cost={r.pack3} level={lvl} count={3} onBuy={() => purchase(`r3-${lvl}`, "buy_streak_restores", { p_level: lvl, p_pack: 3 }, "3 streak restores bought! Use them from the Dashboard if your streak breaks.")} />
+                  </div>
+                  {packs.map((pk) => (
+                    <div key={pk.tier} className="flex items-center gap-3 bg-[var(--surface-2)] rounded-lg px-3 py-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-[var(--text-primary)]">+{pk.xp.toLocaleString()} XP</p>
+                      </div>
+                      <BuyButton k={`x${pk.tier}-${lvl}`} cost={pk.bolts} level={lvl} onBuy={() => purchase(`x${pk.tier}-${lvl}`, "buy_xp_pack", { p_level: lvl, p_tier: pk.tier }, (d) => `+${(d.xp || pk.xp).toLocaleString()} XP added to your total.`)} />
+                    </div>
+                  ))}
+                </div>
+              </GlowCard>
+            );
+          })}
+
+          <GlowCard>
+            <p className="text-sm font-medium text-[var(--text-primary)] mb-3">How to earn bolts</p>
+            <p className="text-xs text-[var(--text-muted)] mb-3">Finish a full timed Focus Timer session — stopping early earns no bolt. Longer sessions earn higher-level bolts.</p>
+            <div className="space-y-2">
+              {[
+                ["Level 1", "15 min – 1 h 29 min"],
+                ["Level 2", "1 h 30 min – 2 h 59 min"],
+                ["Level 3", "3 h or more"],
+              ].map(([lvl, range]) => (
+                <div key={lvl} className="flex items-center justify-between text-sm bg-[var(--surface-2)] rounded-lg px-3 py-2">
+                  <span className="text-[var(--text-primary)] flex items-center gap-1.5"><Zap size={13} className="text-[var(--accent-text)]" fill="currentColor" /> {lvl}</span>
+                  <span className="text-[var(--text-muted)] text-xs">{range}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-[var(--text-faint)] mt-3">There's a daily limit on how many bolts can be earned, so the store stays fair for everyone.</p>
+          </GlowCard>
+        </>
+      )}
+    </div>
+  );
+}
+
 function Settings({ user, onLogout, theme, onSelectTheme, soundEnabled, onToggleSound, selectedSound, onSelectSound, themeSoundError, initialView, goTo }) {
   const { requireAuth } = useRequireAuth();
   const [showAppearance, setShowAppearance] = useState(initialView === "appearance");
@@ -15763,6 +16153,7 @@ function Settings({ user, onLogout, theme, onSelectTheme, soundEnabled, onToggle
   const [showPricingAdmin, setShowPricingAdmin] = useState(initialView === "pricingAdmin");
   const [showAbout, setShowAbout] = useState(initialView === "about");
   const [showLegal, setShowLegal] = useState(initialView === "legal");
+  const [showStore, setShowStore] = useState(initialView === "store");
   const isAdmin = user?.email === "vashvinraj@gmail.com";
   const [showDeleteWarning, setShowDeleteWarning] = useState(false); // step 1: the "are you sure" warning
   const [showDeleteTypeConfirm, setShowDeleteTypeConfirm] = useState(false); // step 2: type CONFIRM
@@ -15789,6 +16180,9 @@ function Settings({ user, onLogout, theme, onSelectTheme, soundEnabled, onToggle
   }
   if (showLegal) {
     return <LegalPage onBack={() => setShowLegal(false)} />;
+  }
+  if (showStore) {
+    return <ChargeStorePage onBack={() => setShowStore(false)} />;
   }
   if (showAppearance) {
     return <AppearancePage theme={theme} onSelectTheme={onSelectTheme} error={themeSoundError} onBack={() => setShowAppearance(false)} goTo={goTo} />;
@@ -15877,6 +16271,19 @@ function Settings({ user, onLogout, theme, onSelectTheme, soundEnabled, onToggle
             </p>
           </div>
         </div>
+      </GlowCard>
+
+      <GlowCard>
+        <button onClick={() => requireAuth(() => setShowStore(true))} className="w-full flex items-center gap-3 text-left group">
+          <div className="h-11 w-11 rounded-xl shrink-0 bg-[rgb(var(--accent-rgb)/0.15)] flex items-center justify-center">
+            <Zap size={18} className="text-[var(--accent-text)]" fill="currentColor" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-[var(--text-primary)]">Charge store</p>
+            <p className="text-xs text-[var(--text-muted)] mt-0.5">Spend your charge bolts on streak restores</p>
+          </div>
+          <ChevronRight size={16} className="text-[var(--text-faint)] group-hover:text-[var(--accent-text)] group-hover:translate-x-0.5 transition-all shrink-0" />
+        </button>
       </GlowCard>
 
       <GlowCard>
@@ -16801,11 +17208,30 @@ export default function StudyFlowAI() {
 
   const handleLogout = () => setConfirmingLogout(true);
 
+  // Ads: Free users and guests only (never while the plan is still loading, so paid users never see a flash of ads).
+  const adsEnabled = screen === "app" && (!user || myGlobalTier === "free");
+  useAdSenseScript(adsEnabled);
+
   const performLogout = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setScreen("landing");
+    // Update the screen FIRST so logging out always responds instantly, even if
+    // the sign-out request to the server is slow or fails.
     setConfirmingLogout(false);
+    setUser(null);
+    setMyGlobalTier(null);
+    setScreen("landing");
+    try {
+      await Promise.race([
+        supabase.auth.signOut(),
+        new Promise((resolve) => setTimeout(resolve, 3000)),
+      ]);
+    } catch (e) {
+      console.error("Sign-out request failed:", e);
+    }
+    // Belt and braces: make sure no saved login is left behind in this browser,
+    // otherwise a refresh could log the person straight back in.
+    try {
+      Object.keys(localStorage).filter((k) => k.startsWith("sb-") && k.includes("auth-token")).forEach((k) => localStorage.removeItem(k));
+    } catch {}
   };
 
   const handleSessionSaved = useCallback(
@@ -16898,11 +17324,11 @@ export default function StudyFlowAI() {
         input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         input[type=number] { -moz-appearance: textfield; }
       `}</style>
-      <aside className="hidden md:flex md:w-60 lg:w-64 shrink-0 border-r border-[var(--border-subtle)] flex-col p-3 h-screen sticky top-0 overflow-y-auto hide-scrollbar">
-        <div className="px-2 py-2.5 mb-2 border-b border-[var(--border-subtle)] flex items-center justify-start">
+      <aside className="hidden md:flex md:w-60 lg:w-64 shrink-0 border-r border-[var(--border-subtle)] flex-col p-3 h-screen sticky top-0 overflow-hidden">
+        <div className="px-2 py-2.5 mb-2 border-b border-[var(--border-subtle)] flex items-center justify-start shrink-0">
           <Logo size={22} />
         </div>
-        <nav className="flex-1 space-y-0.5">
+        <nav className="flex-1 min-h-0 overflow-y-auto hide-scrollbar space-y-0.5">
           {NAV.map((n) => (
             <button
               key={n.key}
@@ -16926,7 +17352,7 @@ export default function StudyFlowAI() {
             </button>
           ))}
         </nav>
-        <div className="border-t border-[var(--border-subtle)] pt-2 mt-2">
+        <div className="border-t border-[var(--border-subtle)] pt-2 mt-2 shrink-0">
           {isGuest ? (
             <button
               onClick={() => requireAuth(() => {})}
@@ -17017,14 +17443,28 @@ export default function StudyFlowAI() {
               setSettingsInitialView("about");
               setTab("settings");
             }}
+            goToStore={() => {
+              setSettingsInitialView("store");
+              setTab("settings");
+            }}
           />
         )}
         <div className={effectiveTab === "focus" ? "" : "hidden"}>
           <Focus onSessionSaved={handleSessionSaved} isActive={effectiveTab === "focus"} />
         </div>
-        {effectiveTab === "tasks" && <Tasks goTo={setTab} />}
+        {effectiveTab === "tasks" && (
+          <>
+            <Tasks goTo={setTab} />
+            {adsEnabled && <AdBanner slotKey="tasks" onRemoveAds={() => setTab("pricing")} />}
+          </>
+        )}
         {effectiveTab === "events" && <EventsPage goTo={setTab} />}
-        {effectiveTab === "stats" && <Statistics refreshKey={statsRefreshKey} />}
+        {effectiveTab === "stats" && (
+          <>
+            <Statistics refreshKey={statsRefreshKey} />
+            {adsEnabled && <AdBanner slotKey="stats" onRemoveAds={() => setTab("pricing")} />}
+          </>
+        )}
         {effectiveTab === "insights" && <Insights refreshKey={statsRefreshKey} goTo={setTab} />}
         {effectiveTab === "habits" && <HabitTracker refreshKey={statsRefreshKey} goTo={setTab} />}
         {effectiveTab === "growth" && <Growth refreshKey={statsRefreshKey} goTo={setTab} />}
